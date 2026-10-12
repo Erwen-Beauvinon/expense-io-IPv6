@@ -3,13 +3,26 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose
 
-.PHONY: help install env up down restart logs migrate ensure-bucket seed dev build start lint typecheck clean
+.PHONY: help install env up down restart logs migrate ensure-bucket seed dev build start lint typecheck clean \
+	bootstrap check-env test validate-adrs verify-fast verify drills verify-all
 
 help: ## Affiche cette aide
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
 install: ## Installe les dépendances npm
 	npm install
+
+bootstrap: env ## Environnement reproductible : npm ci (lockfile), .env, hooks git versionnés
+	npm ci
+	@git config core.hooksPath .githooks
+	@echo "Bootstrap terminé. Vérifie avec : make check-env puis make verify"
+
+check-env: ## Vérifie que Node correspond à .nvmrc et que les outils sont installés
+	@want=$$(cat .nvmrc); have=$$(node -p 'process.versions.node.split(".")[0]'); \
+		if [ "$$have" -lt "$$want" ]; then echo "Node $$have < $$want (.nvmrc)" >&2; exit 1; fi; \
+		echo "Node $$have (>= $$want requis)"
+	@test -x node_modules/.bin/eslint -a -x node_modules/.bin/vitest || { echo "Dépendances absentes : make bootstrap" >&2; exit 1; }
+	@echo "Environnement OK"
 
 env: ## Crée .env depuis .env.example si absent, génère AUTH_SECRET si besoin
 	@if [ ! -f .env ]; then cp .env.example .env; echo ".env créé depuis .env.example"; fi
@@ -56,6 +69,53 @@ lint: ## Lint du code
 
 typecheck: ## Vérifie les types
 	npm run typecheck
+
+test: ## Tests unitaires (Vitest, sans Docker)
+	npm test
+
+validate-adrs: ## Vérifie le format des ADR (docs/adr/)
+	@node scripts/validate-adrs.mjs
+
+# ── Vérification ─────────────────────────────────────────────────────────────
+
+verify-fast: lint typecheck ## Vérification rapide pendant l'édition (lint + types, frontières incluses)
+	@echo "✓ Vérification rapide OK"
+
+verify: lint typecheck test validate-adrs ## Lint, types, tests unitaires, ADR (sans les drills — voir verify-all)
+	@echo "✓ Vérification OK"
+
+# ── Drills : prouver que chaque garde rejette une violation plantée ──────────
+# Ils tournent dans une copie jetable du dépôt (scripts/drills/workspace.mjs).
+
+drill-boundaries-deny: ## ADR-ARCH-001 : chaque import interdit planté est rejeté par ESLint
+	@node scripts/drills/boundaries.mjs deny
+
+drill-boundaries-permit: ## ADR-ARCH-001 : chaque import légal planté est accepté
+	@node scripts/drills/boundaries.mjs permit
+
+drill-boundaries-reason: ## ADR-ARCH-001 : une erreur de syntaxe n'est pas prise pour une violation
+	@node scripts/drills/boundaries.mjs reason
+
+drill-transition-guard: ## ADR-DOMAIN-001 : retirer la garde approve()/reject() fait échouer les tests
+	@node scripts/drills/transition-guard.mjs
+
+DRILLS := $(shell grep -oE '^drill-[a-z-]+:' Makefile | tr -d ':' | sort -u)
+
+drills: ## Lance tous les drills ; échoue si l'un d'eux n'est pas exécuté en CI
+	@for d in $(DRILLS); do \
+		grep -q "make $$d$$" .github/workflows/ci.yml || { \
+			echo "✗ $$d n'est jamais lancé en CI : ajoute-le à .github/workflows/ci.yml" >&2; exit 1; }; \
+	done
+	@for d in $(DRILLS); do \
+		printf '  %-28s' "$$d"; \
+		log=$$(mktemp); \
+		if $(MAKE) --no-print-directory "$$d" >"$$log" 2>&1; then echo "ok"; rm -f "$$log"; \
+		else echo "ÉCHEC"; cat "$$log"; rm -f "$$log"; exit 1; fi; \
+	done
+	@echo "✓ $(words $(DRILLS)) drills OK"
+
+verify-all: verify drills ## Définition de « terminé » : verify puis tous les drills
+	@echo "✓ Vérifié, et chaque garde a rejeté sa violation plantée"
 
 clean: ## Arrête Docker et supprime les volumes — efface les données locales (Postgres/LocalStack)
 	$(COMPOSE) down -v

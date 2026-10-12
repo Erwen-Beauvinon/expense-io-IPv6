@@ -1,0 +1,15 @@
+---
+description: Règles pour les routes API et l'accès base
+globs: src/app/api/**,src/app/actions/**,src/lib/db.ts
+alwaysApply: false
+---
+
+# Routes API
+
+- `/api/*` est exclu de `src/proxy.ts` : chaque handler appelle `auth()` et
+  vérifie `session.user.role` lui-même.
+- Requêtes sur `expense_notes` : via `withUserScope(userId, fn)` et son client,
+  pour que la RLS s'applique (ADR-DATA-001).
+- `users` / `companies` n'ont pas de RLS : filtrer par `company_id`.
+- Décision approve/reject : 409 si la note n'est plus `pending` (ADR-DOMAIN-001).
+- Aucun test automatisé ne couvre ces routes : le signaler dans le compte rendu.
