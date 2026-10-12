@@ -1,0 +1,11 @@
+---
+description: Toujours travailler sur le fork, jamais sur le dépôt amont
+alwaysApply: true
+---
+
+# Toujours le fork
+
+- Dépôt de travail unique : `Erwen-Beauvinon/expense-io-IPv6`.
+- Jamais de push, branche, PR, issue ou commentaire sur l'amont `NathanPrats/expense-io`.
+- PR : `gh pr create --repo Erwen-Beauvinon/expense-io-IPv6` (sans `--repo`, gh vise l'amont).
+- Le hook `.githooks/pre-push` refuse les autres destinations : ne pas le contourner.

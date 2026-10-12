@@ -55,3 +55,6 @@ jobs:
 
       - name: drill-transition-guard
         run: make drill-transition-guard
+
+      - name: drill-fork-guard
+        run: make drill-fork-guard

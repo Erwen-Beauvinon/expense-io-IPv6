@@ -3,6 +3,13 @@
 Humains et agents suivent le même workflow. Partir du [backlog](docs/backlog.md)
 ou décrire un écart concret et la manière de vérifier sa correction.
 
+## Toujours sur le fork
+
+Tout le travail se fait sur le fork `Erwen-Beauvinon/expense-io-IPv6` :
+branches, pushs et PR (`gh pr create --repo Erwen-Beauvinon/expense-io-IPv6`).
+Rien n'est poussé ni proposé sur l'amont `NathanPrats/expense-io`. Le hook
+`pre-push` (activé par `make bootstrap`) refuse tout autre destination.
+
 ## Avant de modifier le code
 
 1. Lire [AGENTS.md](AGENTS.md) : commandes, contraintes, preuves attendues.

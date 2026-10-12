@@ -5,6 +5,20 @@ RLS, stockage S3 via LocalStack, OCR Tesseract). Architecture détaillée dans
 [docs/architecture.md](docs/architecture.md), workflow dans [CONTRIBUTING.md](CONTRIBUTING.md).
 Ce fichier ne contient que ce que les outils ne vérifient pas eux-mêmes.
 
+## Dépôt de travail : toujours le fork
+
+On travaille **uniquement** sur le fork
+[`Erwen-Beauvinon/expense-io-IPv6`](https://github.com/Erwen-Beauvinon/expense-io-IPv6),
+jamais sur le dépôt amont `NathanPrats/expense-io` ni sur un autre dépôt.
+
+- Branches, pushs et PR : sur le fork uniquement. Une PR cible une branche du
+  fork : `gh pr create --repo Erwen-Beauvinon/expense-io-IPv6`
+  (sans `--repo`, `gh` propose l'amont par défaut).
+- Ne jamais ajouter de remote vers l'amont pour y pousser, ni ouvrir d'issue,
+  de PR ou de commentaire sur l'amont.
+- Le hook `.githooks/pre-push` refuse tout push hors du fork
+  (`make drill-fork-guard`). Ne pas le contourner (`--no-verify`) ni le modifier.
+
 ## Commandes
 
 | Tâche | Commande |
@@ -58,7 +72,7 @@ RLS ne sont couvertes par aucun test automatisé (voir [backlog](docs/backlog.md
 
 - `migrations/`, `src/lib/db.ts` : schéma et isolation des données.
 - `src/lib/auth.ts`, `src/proxy.ts` : authentification et sessions.
-- `.github/workflows/`, `eslint.config.mjs`, `docs/adr/` : règles de vérification.
+- `.github/workflows/`, `eslint.config.mjs`, `docs/adr/`, `.githooks/` : règles de vérification.
 
 L'autorisation de la tâche en cours s'applique toujours. CODEOWNERS contient
 des équipes fictives : sa présence ne prouve aucune revue obligatoire.

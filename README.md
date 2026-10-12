@@ -65,6 +65,9 @@ make clean   # arrête et supprime les données locales
 
 ## Vérification et contribution (humains et agents IA)
 
+> On travaille toujours sur le fork `Erwen-Beauvinon/expense-io-IPv6`, jamais sur
+> l'amont `NathanPrats/expense-io` : le hook `pre-push` refuse toute autre destination.
+
 ```bash
 make bootstrap     # npm ci (lockfile), .env, hooks git versionnés
 make verify-fast   # lint + frontières de couches + types

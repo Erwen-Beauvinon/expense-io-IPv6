@@ -15,6 +15,8 @@ install: ## Installe les dépendances npm
 bootstrap: env ## Environnement reproductible : npm ci (lockfile), .env, hooks git versionnés
 	npm ci
 	@git config core.hooksPath .githooks
+	@# `gh pr create` vise par défaut le dépôt amont d'un fork : on fixe le fork.
+	@command -v gh >/dev/null && gh repo set-default Erwen-Beauvinon/expense-io-IPv6 || true
 	@echo "Bootstrap terminé. Vérifie avec : make check-env puis make verify"
 
 check-env: ## Vérifie que Node correspond à .nvmrc et que les outils sont installés
@@ -98,6 +100,9 @@ drill-boundaries-reason: ## ADR-ARCH-001 : une erreur de syntaxe n'est pas prise
 
 drill-transition-guard: ## ADR-DOMAIN-001 : retirer la garde approve()/reject() fait échouer les tests
 	@node scripts/drills/transition-guard.mjs
+
+drill-fork-guard: ## Le hook pre-push refuse tout push hors du fork Erwen-Beauvinon/expense-io-IPv6
+	@bash scripts/drills/fork-guard.sh
 
 DRILLS := $(shell grep -oE '^drill-[a-z-]+:' Makefile | tr -d ':' | sort -u)
 

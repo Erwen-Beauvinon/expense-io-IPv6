@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Hook pre-push versionné, activé par `make bootstrap`
+# (git config core.hooksPath .githooks).
+#
+# On travaille toujours sur le fork Erwen-Beauvinon/expense-io-IPv6, jamais
+# sur le dépôt amont NathanPrats/expense-io ni sur un autre dépôt. Ce hook
+# refuse tout push dont l'URL de destination n'est pas celle du fork.
+# Git appelle ce hook avec : $1 = nom du remote, $2 = URL du remote.
+set -euo pipefail
+
+FORK='Erwen-Beauvinon/expense-io-IPv6'
+url="${2:-}"
+
+# Accepte les formes SSH et HTTPS, avec ou sans .git final.
+normalized="$(printf '%s' "$url" | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)##; s#\.git$##; s#/$##')"
+
+if [ "$normalized" != "$FORK" ]; then
+  echo "✗ Push refusé vers « $url »." >&2
+  echo "  Ce dépôt ne se pousse que sur le fork github.com/$FORK (voir AGENTS.md)." >&2
+  exit 1
+fi
