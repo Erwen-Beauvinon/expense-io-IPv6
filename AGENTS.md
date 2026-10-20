@@ -30,9 +30,16 @@ jamais sur le dépôt amont `NathanPrats/expense-io` ni sur un autre dépôt.
 | Définition de « terminé » | `make verify-all` (verify + tous les drills) |
 | Tests unitaires / un seul test | `make test` / `npx vitest run tests/unit/domain -t "nom"` |
 | Format des ADR | `make validate-adrs` |
+| Tests E2E (Docker requis) / un seul fichier | `make test-e2e` / `npx playwright test tests/e2e/manager.spec.ts` |
 
-`make verify` ne démarre ni PostgreSQL ni LocalStack : les routes API et la
-RLS ne sont couvertes par aucun test automatisé (voir [backlog](docs/backlog.md)).
+`make verify` ne démarre ni PostgreSQL ni LocalStack. Les parcours de
+l'interface sont couverts par les E2E (`tests/e2e/`, job CI `e2e`), mais
+la RLS et les accès directs à l'API ne sont toujours testés par rien (voir [backlog](docs/backlog.md)).
+
+Les E2E figent le comportement **actuel** visible par l'utilisateur. Si une
+refonte en casse un, c'est une régression tant qu'aucun ADR n'a acté le
+changement de comportement. Ne jamais modifier un test E2E pour qu'il passe
+dans la même PR qu'une refonte censée ne rien changer.
 
 ## Ordre de travail
 

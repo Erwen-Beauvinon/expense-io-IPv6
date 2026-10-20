@@ -40,3 +40,9 @@ next-env.d.ts
 
 # tests
 /coverage
+
+# Playwright
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
