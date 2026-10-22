@@ -28,6 +28,16 @@ check-env: ## Vérifie que Node correspond à .nvmrc et que les outils sont inst
 
 env: ## Crée .env depuis .env.example si absent, génère AUTH_SECRET si besoin
 	@if [ ! -f .env ]; then cp .env.example .env; echo ".env créé depuis .env.example"; fi
+	@VALEUR=$$(grep '^AUTH_SECRET=' .env 2>/dev/null | cut -d= -f2-); \
+	case "$$VALEUR" in changeme*|"") BESOIN=1;; *) [ $${#VALEUR} -ge 32 ] || BESOIN=1;; esac; \
+	if [ -n "$$BESOIN" ]; then \
+		if command -v openssl >/dev/null 2>&1; then SECRET=$$(openssl rand -hex 32); \
+		else SECRET=$$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"); fi; \
+		if [ -z "$$SECRET" ]; then echo "Génération impossible : définis AUTH_SECRET à la main (npx auth secret)" >&2; exit 1; fi; \
+		if grep -q '^AUTH_SECRET=' .env 2>/dev/null; then sed -i "s/^AUTH_SECRET=.*/AUTH_SECRET=$$SECRET/" .env; \
+		else printf '\nAUTH_SECRET=%s\n' "$$SECRET" >> .env; fi; \
+		echo "AUTH_SECRET généré dans .env"; \
+	fi
 
 up: env ## Démarre Postgres + LocalStack (Docker) et attend qu'ils soient prêts
 	$(COMPOSE) up -d
