@@ -17,3 +17,4 @@ fonctionnalités. Statuts : `open`, `partial`, `resolved`.
 | 009 | open | L'audit `ai-ready audit` ne détecte que import-linter (Python) : les frontières ESLint y restent `unknown` alors qu'elles sont démontrées par drill. | Limite du toolkit amont. |
 | 010 | open | Aucune mesure comparative de performance des agents. | Protocole `benchmarks/` d'ai-ready-repo. |
 | 011 | open | Seul le type MIME déclaré par le client est contrôlé (audit A : « MIME déclaré seulement ») : un contenu réel différent du type annoncé n'est pas détecté, ni à la soumission ni à la suggestion. | Contrôle du contenu (signature magique) avant traitement ; hors propositions, à arbitrer. |
+| 012 | open | E-mails non normalisés : `A@x.fr` et `a@x.fr` créent deux comptes (revue phase/7). Le domaine est déjà en minuscules, le reste de l'adresse ne l'est pas. | Normaliser (minuscules + trim) avant contrôle et écriture ; vérifier le contrat client avant. |

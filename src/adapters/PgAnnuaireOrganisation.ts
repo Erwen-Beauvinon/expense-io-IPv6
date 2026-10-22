@@ -1,7 +1,10 @@
 import type { Transaction } from '@/domain/Transaction'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 import { getPool } from '@/lib/db'
-import type { AnnuaireOrganisation } from '@/ports/AnnuaireOrganisation'
+import type {
+  AnnuaireOrganisation,
+  NouvelUtilisateur,
+} from '@/ports/AnnuaireOrganisation'
 import { clientDe } from './PgUnitOfWork'
 
 // Ligne SQL brute lue dans `users`.
@@ -113,5 +116,95 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
       'UPDATE users SET manager_id = $1 WHERE id = $2 AND company_id = $3',
       [managerId, userId, companyId]
     )
+  }
+
+  async trouverUtilisateurParEmail(
+    tx: Transaction,
+    email: string
+  ): Promise<UtilisateurAnnuaire | null> {
+    // Phase 7 : contrôle préalable d'existence (la course reste
+    // possible : la contrainte UNIQUE tranche, Inscrire traduit 23505).
+    const client = clientDe(tx)
+    const result = await client.query<{
+      id: string
+      company_id: string
+      role: 'employee' | 'manager' | 'hr_admin'
+      manager_id: string | null
+      name: string
+      email: string
+    }>(
+      'SELECT id, company_id, role, manager_id, name, email FROM users WHERE email = $1',
+      [email]
+    )
+    const ligne = result.rows[0]
+    if (!ligne) return null
+    return {
+      id: ligne.id,
+      companyId: ligne.company_id,
+      role: ligne.role,
+      managerId: ligne.manager_id,
+      name: ligne.name,
+      email: ligne.email,
+    }
+  }
+
+  async creerEntreprise(
+    tx: Transaction,
+    nom: string,
+    domaine: string
+  ): Promise<{ id: string; nouvelle: boolean }> {
+    // Phase 7 : « le premier inscrit d'un domaine devient RH » (I14).
+    // ON CONFLICT ne fait rien : l'appelant relit l'entreprise créée
+    // par le concurrent gagnant.
+    const client = clientDe(tx)
+    const inseree = await client.query<{ id: string }>(
+      `INSERT INTO companies (name, email_domain) VALUES ($1, $2)
+       ON CONFLICT (email_domain) DO NOTHING
+       RETURNING id`,
+      [nom, domaine]
+    )
+    if (inseree.rows[0]) return { id: inseree.rows[0].id, nouvelle: true }
+    const existante = await client.query<{ id: string }>(
+      'SELECT id FROM companies WHERE email_domain = $1',
+      [domaine]
+    )
+    return { id: existante.rows[0].id, nouvelle: false }
+  }
+
+  async creerUtilisateur(
+    tx: Transaction,
+    entree: NouvelUtilisateur
+  ): Promise<UtilisateurAnnuaire> {
+    // Phase 7 : la contrainte UNIQUE(email) tranche les doublons
+    // concurrents (erreur 23505 traduite par Inscrire).
+    const client = clientDe(tx)
+    const insere = await client.query<{
+      id: string
+      company_id: string
+      role: 'employee' | 'manager' | 'hr_admin'
+      manager_id: string | null
+      name: string
+      email: string
+    }>(
+      `INSERT INTO users (name, email, password_hash, company_id, role)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, company_id, role, manager_id, name, email`,
+      [
+        entree.name,
+        entree.email,
+        entree.passwordHash,
+        entree.companyId,
+        entree.role,
+      ]
+    )
+    const ligne = insere.rows[0]
+    return {
+      id: ligne.id,
+      companyId: ligne.company_id,
+      role: ligne.role,
+      managerId: ligne.manager_id,
+      name: ligne.name,
+      email: ligne.email,
+    }
   }
 }
