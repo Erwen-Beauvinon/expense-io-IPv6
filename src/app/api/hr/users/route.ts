@@ -1,5 +1,7 @@
+import { consulterAnnuaire } from '@/application/ConsulterAnnuaire'
+import { resolveActeur } from '@/lib/actor'
 import { auth } from '@/lib/auth'
-import { getPool } from '@/lib/db'
+import { getAnnuaire } from '@/lib/container'
 import { respondError } from '@/lib/errors'
 
 export async function GET() {
@@ -8,21 +10,19 @@ export async function GET() {
     if (!session?.user || session.user.role !== 'hr_admin') {
       return Response.json({ error: 'Unauthorized' }, { status: 403 })
     }
+    const acteur = await resolveActeur(session)
+    if (!acteur) {
+      return Response.json({ error: 'Unauthorized' }, { status: 403 })
+    }
 
-    const result = await getPool().query(
-      `SELECT id, name, email, role, manager_id FROM users
-       WHERE role IN ('employee', 'manager')
-         AND company_id = (SELECT company_id FROM users WHERE id = $1)
-       ORDER BY name`,
-      [session.user.id]
-    )
+    const utilisateurs = await consulterAnnuaire(acteur, getAnnuaire())
     return Response.json(
-      result.rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        role: row.role,
-        managerId: row.manager_id,
+      utilisateurs.map((utilisateur) => ({
+        id: utilisateur.id,
+        name: utilisateur.name,
+        email: utilisateur.email,
+        role: utilisateur.role,
+        managerId: utilisateur.managerId,
       }))
     )
   } catch (error) {
