@@ -1,6 +1,6 @@
 ---
 id: ADR-DATA-002
-status: proposed
+status: accepted
 scope:
   - docker-compose.yml
   - migrations/**
@@ -11,9 +11,10 @@ scope:
 
 > Décision de traitement des risques du 2026-10-19. **Validée côté
 > architecture le 2026-10-21** par le pilote 4a (rôle dédié et égalité
-> d'entreprise dans les policies RH). Statut `proposed` : le modèle de
-> rôles SQL relève du pilote 2 (données), qui doit l'accepter avant la
-> phase 4 du plan de migration.
+> d'entreprise dans les policies RH), puis **acceptée le 2026-10-22**
+> par Erwen Beauvinon-Petitjean. Le provisionnement concret du rôle
+> (création, secrets, rotation) reste coordonné avec le pilote 2
+> (données) avant la phase 4 du plan de migration.
 
 ## Decision
 
