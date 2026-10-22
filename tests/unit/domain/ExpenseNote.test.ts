@@ -10,6 +10,7 @@ function note(status: ExpenseNoteStatus): ExpenseNote {
     description: 'Déjeuner client',
     receiptKey: 'receipts/1.png',
     status,
+    createdAt: '2026-01-15T10:00:00.000Z',
   })
 }
 
@@ -53,6 +54,7 @@ describe('ExpenseNote', () => {
       expenseDate: '2026-01-15',
       description: 'Déjeuner client',
       receiptKey: 'receipts/1.png',
+      createdAt: '2026-01-15T10:00:00.000Z',
     })
   })
 })

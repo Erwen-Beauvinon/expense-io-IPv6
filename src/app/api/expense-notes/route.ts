@@ -1,6 +1,11 @@
 import path from 'node:path'
 import type { NextRequest } from 'next/server'
+import { consulterMesNotes } from '@/application/ConsulterMesNotes'
+import { ExpenseNote } from '@/domain/ExpenseNote'
+import { resolveActeur } from '@/lib/actor'
 import { auth } from '@/lib/auth'
+import { getNotes } from '@/lib/container'
+import { toExpenseNoteView } from '@/lib/serialisation'
 import { getPool, withUserScope } from '@/lib/db'
 import { respondError } from '@/lib/errors'
 import { receiptKeyFor, uploadReceipt } from '@/lib/storage'
@@ -15,39 +20,26 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'application/pdf': '.pdf',
 }
 
-function toExpenseNote(row: Record<string, unknown>) {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    amount: Number.parseFloat(row.amount as string),
-    expenseDate: row.expense_date,
-    description: row.description,
-    receiptKey: row.receipt_key,
-    status: row.status,
-    createdAt: new Date(row.created_at as string).toISOString(),
-  }
-}
-
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const acteur = await resolveActeur(session)
+    if (!acteur) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    const url = new URL(request.url)
-    // Le tri est construit dynamiquement plutôt que via une valeur liée :
-    // ORDER BY n'accepte pas de paramètre positionnel pour un nom de colonne
-    // en SQL standard, donc ce fragment est concaténé directement.
-    const sort = url.searchParams.get('sort') || 'created_at DESC'
-
-    return withUserScope(session.user.id, async (client) => {
-      const result = await client.query(
-        `SELECT * FROM expense_notes WHERE user_id = $1 ORDER BY ${sort}`,
-        [session.user.id]
-      )
-      return Response.json(result.rows.map(toExpenseNote))
-    })
+    // Phase 2 : historique personnel via le cas d'usage (tri fermé :
+    // toute valeur hors liste est refusée en 400 ; le client web
+    // n'envoie aucun `sort`, défaut inchangé).
+    const notes = await consulterMesNotes(
+      acteur,
+      new URL(request.url).searchParams.get('sort'),
+      getNotes()
+    )
+    return Response.json(notes.map(toExpenseNoteView))
   } catch (error) {
     return respondError(error)
   }
@@ -104,8 +96,27 @@ export async function POST(request: NextRequest) {
       `UPDATE expense_notes SET receipt_key = $1 WHERE id = $2 RETURNING *`,
       [receiptKey, note.id]
     )
+    const ligne = updated.rows[0]
 
-    return Response.json(toExpenseNote(updated.rows[0]), { status: 201 })
+    // Phase 2 : réutilise la sérialisation unique, qui ne prend que la
+    // note — aucun contexte auteur fabriqué (revues phase/2 ; la vue
+    // JSON n'expose pas l'auteur). Le repository fournira le contexte
+    // quand SoumettreNote migrera en phase 5.
+    return Response.json(
+      toExpenseNoteView({
+        note: new ExpenseNote({
+          id: ligne.id,
+          userId: ligne.user_id,
+          amount: Number.parseFloat(ligne.amount),
+          expenseDate: ligne.expense_date,
+          description: ligne.description,
+          receiptKey: ligne.receipt_key,
+          status: ligne.status,
+          createdAt: ligne.created_at,
+        }),
+      }),
+      { status: 201 }
+    )
   } catch (error) {
     return respondError(error)
   }

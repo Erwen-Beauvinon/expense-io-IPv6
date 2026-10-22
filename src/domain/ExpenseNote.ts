@@ -8,6 +8,10 @@ export interface ExpenseNoteProps {
   description: string
   receiptKey: string
   status: ExpenseNoteStatus
+  // Renseigné par l'adaptateur depuis `created_at`. Obligatoire :
+  // toute lecture persistée en a un ; les tests du domaine pur
+  // fournissent une valeur factice (revues phase/2).
+  createdAt: string
 }
 
 export class ExpenseNote {
