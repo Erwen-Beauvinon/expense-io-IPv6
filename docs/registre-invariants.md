@@ -57,7 +57,8 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   → HTTP 400 (contrat client §5).
 - **Tests** : D — `Montant` refuse `0`, négatif, `NaN`, `12abc`,
   dépassement de capacité ; A — `SoumettreNote` rejette sans rien
-  persister.
+  persister. C — le golden fige le `400 Montant invalide`
+  (`C02_invalid`, textes actés au contrat client §5).
 - **Question ouverte** : arrondi à 2 décimales accepté ou refusé ?
   Montant maximum métier (plafond de note) autre que la capacité SQL ?
 
@@ -83,7 +84,9 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 
 - **Énoncé** : une note n'existe qu'avec une description non vide et un
   justificatif fourni, d'un type autorisé (`image/png`, `image/jpeg`,
-  `image/webp`, `application/pdf`) et de taille ≤ 10 Mio.
+  `image/webp`, `application/pdf`) et de taille ≤ 10 Mio. Tranché en
+  revue phase/5 : la description est stockée rognée (`trim`) — la
+  réponse peut donc différer de la saisie sur les espaces de bord.
 - **Statut** : inféré (regroupe les contrôles 400 déjà présents dans le
   code ; le « justificatif obligatoire » du schéma proposé couvre
   I1–I4). À éventuellement scinder en deux invariants par le
@@ -117,7 +120,9 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   justificatif.
 - **Garantie cible** : envoi du reçu d'abord, puis création de la note
   avec sa clé en une seule transaction (port `UnitOfWork`), ou
-  suppression compensatoire prouvée en cas d'échec.
+  suppression compensatoire prouvée en cas d'échec. Sur COMMIT
+  d'issue incertaine (`EcritureIncertaine`, revue phase/5), aucune
+  compensation : la note existe peut-être, le reçu est conservé.
 - **Tests** : I — panne S3 simulée entre upload et insertion : aucune
   ligne en base, aucun objet orphelin listé ; I — le chemin nominal
   produit note + objet dans le même état final. C — succès toujours

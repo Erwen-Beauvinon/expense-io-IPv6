@@ -1,4 +1,4 @@
-import { getReceiptUrl, uploadReceipt } from '@/lib/storage'
+import { deleteReceipt, getReceiptUrl, uploadReceipt } from '@/lib/storage'
 import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'
 
 export class S3ReceiptAdapter implements ReceiptStoragePort {
@@ -8,5 +8,9 @@ export class S3ReceiptAdapter implements ReceiptStoragePort {
 
   async getSignedUrl(key: string, expiresInSeconds = 300): Promise<string> {
     return getReceiptUrl(key, expiresInSeconds)
+  }
+
+  async supprimer(key: string): Promise<void> {
+    return deleteReceipt(key)
   }
 }

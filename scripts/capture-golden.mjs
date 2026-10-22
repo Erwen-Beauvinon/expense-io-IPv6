@@ -147,6 +147,14 @@ for (const role of Object.keys(USERS)) {
   if (b && typeof b === 'object' && typeof b.receiptKey === 'string') {
     b.receiptKey = b.receiptKey.replace(/receipts\/\d+/, 'receipts/<seq>')
   }
+  // Entrée invalide (revue phase/5 §3, contrat §5) : 400 au texte acté,
+  // sans écriture — le seed reste identique pour les captures suivantes.
+  const fInvalide = new FormData()
+  fInvalide.set('amount', '12abc')
+  fInvalide.set('expenseDate', '2026-10-01')
+  fInvalide.set('description', 'Taxi golden')
+  fInvalide.set('receipt', new File([png1x1], 'r.png', { type: 'image/png' }))
+  out.employee.C02_invalid = await api('/api/expense-notes', { method: 'POST', body: fInvalide })
 }
 
 console.log(JSON.stringify(normalize(out), null, 2))

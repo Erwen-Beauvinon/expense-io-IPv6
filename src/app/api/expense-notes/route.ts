@@ -1,24 +1,12 @@
-import path from 'node:path'
 import type { NextRequest } from 'next/server'
 import { consulterMesNotes } from '@/application/ConsulterMesNotes'
-import { ExpenseNote } from '@/domain/ExpenseNote'
+import { soumettreNote, validerContenantRecu } from '@/application/SoumettreNote'
 import { resolveActeur } from '@/lib/actor'
 import { auth } from '@/lib/auth'
-import { getNotes } from '@/lib/container'
+import { getNotes, getStockageRecus, getUnitOfWork } from '@/lib/container'
 import { toExpenseNoteView } from '@/lib/serialisation'
-import { getPool, withUserScope } from '@/lib/db'
 import { respondError } from '@/lib/errors'
-import { receiptKeyFor, uploadReceipt } from '@/lib/storage'
 
-const ALLOWED_RECEIPT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf']
-const MAX_RECEIPT_BYTES = 10 * 1024 * 1024
-
-const EXTENSION_BY_MIME: Record<string, string> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/webp': '.webp',
-  'application/pdf': '.pdf',
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,78 +33,51 @@ export async function GET(request: NextRequest) {
   }
 }
 
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const acteur = await resolveActeur(session)
+    if (!acteur) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
+    // Phase 5 : toute la validation métier (I1, I2, bornes OCR) vit dans
+    // SoumettreNote ; la route ne fait que l'adaptation HTTP. Réponses
+    // inchangées (contrat C02 : 201, mêmes champs, mêmes 400).
+    // Revue phase/5 §1 (F7) : les bornes du contenant sont vérifiées sur
+    // les métadonnées AVANT de charger les octets en mémoire (mêmes 400
+    // que le cas d'usage, qui les réapplique par défense en profondeur).
     const formData = await request.formData()
-    const amountRaw = formData.get('amount')
-    const expenseDate = formData.get('expenseDate')
-    const description = formData.get('description')
     const receipt = formData.get('receipt')
-
-    const amount = typeof amountRaw === 'string' ? Number.parseFloat(amountRaw) : NaN
-
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      typeof expenseDate !== 'string' ||
-      typeof description !== 'string' ||
-      description.trim().length === 0 ||
-      !(receipt instanceof File)
-    ) {
-      return Response.json({ error: 'Champs invalides' }, { status: 400 })
+    if (receipt instanceof File) {
+      validerContenantRecu({ mimeType: receipt.type, size: receipt.size })
     }
-    if (!ALLOWED_RECEIPT_TYPES.includes(receipt.type)) {
-      return Response.json({ error: 'Type de fichier non autorisé pour le reçu' }, { status: 400 })
-    }
-    if (receipt.size > MAX_RECEIPT_BYTES) {
-      return Response.json({ error: 'Fichier trop volumineux' }, { status: 400 })
-    }
-
-    const note = await withUserScope(session.user.id, async (client) => {
-      const inserted = await client.query(
-        `INSERT INTO expense_notes (user_id, amount, expense_date, description, receipt_key)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *`,
-        [session.user.id, amount, expenseDate, description, '']
-      )
-      return inserted.rows[0]
-    })
-
-    const extension = EXTENSION_BY_MIME[receipt.type] ?? path.extname(receipt.name) ?? ''
-    const receiptKey = receiptKeyFor(note.receipt_seq, extension)
-    const buffer = Buffer.from(await receipt.arrayBuffer())
-    await uploadReceipt(receiptKey, buffer, receipt.type)
-
-    const updated = await getPool().query(
-      `UPDATE expense_notes SET receipt_key = $1 WHERE id = $2 RETURNING *`,
-      [receiptKey, note.id]
+    const created = await soumettreNote(
+      acteur,
+      {
+        montant: formData.get('amount'),
+        dateDepense: formData.get('expenseDate'),
+        description: formData.get('description'),
+        recu:
+          receipt instanceof File
+            ? {
+                data: Buffer.from(await receipt.arrayBuffer()),
+                mimeType: receipt.type,
+                size: receipt.size,
+              }
+            : null,
+      },
+      {
+        notes: getNotes(),
+        stockage: getStockageRecus(),
+        unitOfWork: getUnitOfWork(),
+      }
     )
-    const ligne = updated.rows[0]
-
-    // Phase 2 : réutilise la sérialisation unique, qui ne prend que la
-    // note — aucun contexte auteur fabriqué (revues phase/2 ; la vue
-    // JSON n'expose pas l'auteur). Le repository fournira le contexte
-    // quand SoumettreNote migrera en phase 5.
-    return Response.json(
-      toExpenseNoteView({
-        note: new ExpenseNote({
-          id: ligne.id,
-          userId: ligne.user_id,
-          amount: Number.parseFloat(ligne.amount),
-          expenseDate: ligne.expense_date,
-          description: ligne.description,
-          receiptKey: ligne.receipt_key,
-          status: ligne.status,
-          createdAt: ligne.created_at,
-        }),
-      }),
-      { status: 201 }
-    )
+    return Response.json(toExpenseNoteView(created), { status: 201 })
   } catch (error) {
     return respondError(error)
   }

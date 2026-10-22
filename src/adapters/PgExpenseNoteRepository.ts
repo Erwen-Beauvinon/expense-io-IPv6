@@ -3,8 +3,13 @@ import { ExpenseNote } from '@/domain/ExpenseNote'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
-import { withUserScope } from '@/lib/db'
-import type { ExpenseNoteRepository } from '@/ports/ExpenseNoteRepository'
+import type { Transaction } from '@/domain/Transaction'
+import { getPool, withUserScope } from '@/lib/db'
+import type {
+  ExpenseNoteRepository,
+  NouvelleNote,
+} from '@/ports/ExpenseNoteRepository'
+import { clientDe } from './PgUnitOfWork'
 
 // Correspondance interne enum → SQL. Jamais construite depuis une
 // entrée client : seules les valeurs du type OrdreTri y entrent.
@@ -190,5 +195,41 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
       )
       return result.rows.map(versNoteAvecAuteur)
     })
+  }
+
+  async reserverSequence(): Promise<number> {
+    // Phase 5 (revue §7) : numéro unique pour la clé receipts/{seq}.
+    // Nom de séquence résolu dynamiquement (indépendant du nom
+    // auto-généré table_colonne_seq). Les trous (échec après
+    // réservation) sont sans signification.
+    const result = await getPool().query<{ seq: string }>(
+      `SELECT nextval(pg_get_serial_sequence('expense_notes', 'receipt_seq')) AS seq`
+    )
+    return Number.parseInt(result.rows[0].seq, 10)
+  }
+
+  async creer(tx: Transaction, entree: NouvelleNote): Promise<NoteAvecAuteur> {
+    // Phase 5 : création dans la transaction du cas d'usage. La vue
+    // auteur est relue en jointure (I9/I10 : périmètre entreprise).
+    const client = clientDe(tx)
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO expense_notes (user_id, amount, expense_date, description, receipt_key)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [
+        entree.auteurId,
+        entree.montant,
+        entree.dateDepense,
+        entree.description,
+        entree.receiptKey,
+      ]
+    )
+    const relu = await client.query<LigneNote>(
+      `${SELECT_AVEC_AUTEUR} WHERE en.id = $1`,
+      [inserted.rows[0].id]
+    )
+    const ligne = relu.rows[0]
+    if (!ligne) throw new Error('Note créée introuvable')
+    return versNoteAvecAuteur(ligne)
   }
 }

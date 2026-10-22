@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 let client: S3Client | undefined
@@ -30,6 +30,10 @@ export async function uploadReceipt(key: string, body: Buffer, contentType: stri
   await getClient().send(
     new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: body, ContentType: contentType })
   )
+}
+
+export async function deleteReceipt(key: string): Promise<void> {
+  await getClient().send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }))
 }
 
 export async function getReceiptUrl(key: string, expiresInSeconds = 300): Promise<string> {

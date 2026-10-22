@@ -16,3 +16,4 @@ fonctionnalités. Statuts : `open`, `partial`, `resolved`.
 | 008 | resolved | Le workflow `security.yml` a tourné sur la PR d'intégration (2026-10-22) : dependency-review et gitleaks verts sur l'historique. | — |
 | 009 | open | L'audit `ai-ready audit` ne détecte que import-linter (Python) : les frontières ESLint y restent `unknown` alors qu'elles sont démontrées par drill. | Limite du toolkit amont. |
 | 010 | open | Aucune mesure comparative de performance des agents. | Protocole `benchmarks/` d'ai-ready-repo. |
+| 011 | open | Seul le type MIME déclaré par le client est contrôlé (audit A : « MIME déclaré seulement ») : un contenu réel différent du type annoncé n'est pas détecté, ni à la soumission ni à la suggestion. | Contrôle du contenu (signature magique) avant traitement ; hors propositions, à arbitrer. |
