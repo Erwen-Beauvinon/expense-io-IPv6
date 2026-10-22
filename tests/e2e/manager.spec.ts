@@ -40,6 +40,8 @@ test.describe('Manager', () => {
     await login(page, company.manager)
     await page.goto('/manager')
     await noteRow(page, 'Abonnement presse').getByRole('button', { name: 'Rejeter' }).click()
+    await noteRow(page, 'Abonnement presse').getByLabel(/Motif du rejet/).fill('Justificatif illisible')
+    await noteRow(page, 'Abonnement presse').getByRole('button', { name: 'Confirmer le rejet' }).click()
 
     await expect(noteRow(page, 'Abonnement presse')).toHaveCount(0)
     expect(await noteStatus(noteId)).toBe('rejected')

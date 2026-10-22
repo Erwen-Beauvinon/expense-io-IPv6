@@ -1,5 +1,6 @@
 import type { Acteur } from '@/domain/Acteur'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
+import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
 
 // Port ExpenseNoteRepository (docs/contrats-ports.md §3) : persister et
@@ -22,4 +23,23 @@ export interface ExpenseNoteRepository {
     auteurId: string,
     tri: OrdreTri
   ): Promise<NoteAvecAuteur[]>
+
+  // Phase 4 : bascule atomique pending → décision (I5, I6). UPDATE
+  // conditionnel unique : périmètre entreprise + valideur courant
+  // (PolitiqueAcces, via users) dans le WHERE, écriture de statut,
+  // decided_by, decided_at (= now() SQL, horloge unique) et
+  // decision_reason ensemble. true si appliquée ; false si déjà
+  // tranchée ou valideur perdu entre-temps (409 dans les deux cas,
+  // tableau ligne 4 + ADR-ARCH-002 §3).
+  trancherSiEnAttente(
+    acteur: Acteur,
+    noteId: string,
+    decision: Decision,
+    motif: string | null
+  ): Promise<boolean>
+
+  // Phase 4 : notes en attente visibles par l'acteur (I8) — manager :
+  // managés directs ; RH : toute l'entreprise. N+1 exclu (repli propre
+  // jusqu'à l'alignement RLS, phase 8).
+  listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]>
 }

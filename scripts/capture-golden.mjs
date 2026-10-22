@@ -92,9 +92,15 @@ for (const role of Object.keys(USERS)) {
   const first = Array.isArray(out.manager.C05_list.body) ? out.manager.C05_list.body[0] : null
   if (first && first.id) {
     out.manager.C06_receipt = await api(`/api/manager/expense-notes/${first.id}/receipt-url`)
-    out.manager.C07_reject = await api(`/api/manager/expense-notes/${first.id}/reject`, { method: 'POST' })
+    out.manager.C07_reject_sans_motif = await api(`/api/manager/expense-notes/${first.id}/reject`, { method: 'POST' })
+    out.manager.C07_reject = await api(`/api/manager/expense-notes/${first.id}/reject`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Montant incohérent avec le reçu' }),
+    })
   } else {
     out.manager.C06_receipt = { status: 'skip', body: null }
+    out.manager.C07_reject_sans_motif = { status: 'skip', body: null }
     out.manager.C07_reject = { status: 'skip', body: null }
   }
 }
@@ -116,9 +122,15 @@ for (const role of Object.keys(USERS)) {
   const first = Array.isArray(out.hr.C09_list.body) ? out.hr.C09_list.body[0] : null
   if (first && first.id) {
     out.hr.C10_receipt = await api(`/api/hr/expense-notes/${first.id}/receipt-url`)
-    out.hr.C11_reject = await api(`/api/hr/expense-notes/${first.id}/reject`, { method: 'POST' })
+    out.hr.C11_reject_sans_motif = await api(`/api/hr/expense-notes/${first.id}/reject`, { method: 'POST' })
+    out.hr.C11_reject = await api(`/api/hr/expense-notes/${first.id}/reject`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Justificatif illisible' }),
+    })
   } else {
     out.hr.C10_receipt = { status: 'skip', body: null }
+    out.hr.C11_reject_sans_motif = { status: 'skip', body: null }
     out.hr.C11_reject = { status: 'skip', body: null }
   }
 }
