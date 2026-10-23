@@ -1,0 +1,18 @@
+# Backlog de vérification
+
+Écarts connus entre ce que le dépôt affirme et ce qu'il prouve. Ce backlog
+porte sur la vérification et le guidage des agents, pas sur les
+fonctionnalités. Statuts : `open`, `partial`, `resolved`.
+
+| # | Statut | Écart | Piste |
+|---|---|---|---|
+| 001 | open | Routes API, policies RLS et contrôles de rôle non testés automatiquement. | Tests d'intégration contre un PostgreSQL éphémère (Docker ou CI service). |
+| 002 | open | Les gardes 409 « Already decided » des routes ne sont couvertes par aucun drill (ADR-DOMAIN-001). | Dépend de #001. |
+| 003 | open | Aucun formateur : appliquer Prettier reformaterait 13 fichiers existants. | Choisir une config, reformater en un commit dédié, ajouter `format-check` à `verify`. |
+| 004 | open | `src/domain/` et `src/adapters/` ne sont pas utilisés par les routes : leurs tests ne couvrent pas le chemin réellement exécuté. | Décision d'architecture à prendre avant de brancher. |
+| 005 | open | Les fonctions d'analyse OCR (`parseAmount`, `parseExpenseDate`) ne sont pas exportées, donc non testées. | Les exporter ou tester via `suggestFields` avec des images de référence. |
+| 006 | open | `next build` ne fait pas partie de `make verify`. | Ajouter un job CI `make build` si le temps de CI le permet. |
+| 007 | open | CODEOWNERS contient des équipes fictives ; protection de branche non configurée. | Renseigner de vrais handles et activer les revues obligatoires. |
+| 008 | resolved | Le workflow `security.yml` a tourné sur la PR d'intégration (2026-10-22) : dependency-review et gitleaks verts sur l'historique. | — |
+| 009 | open | L'audit `ai-ready audit` ne détecte que import-linter (Python) : les frontières ESLint y restent `unknown` alors qu'elles sont démontrées par drill. | Limite du toolkit amont. |
+| 010 | open | Aucune mesure comparative de performance des agents. | Protocole `benchmarks/` d'ai-ready-repo. |

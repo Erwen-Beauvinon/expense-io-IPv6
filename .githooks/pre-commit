@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Hook pre-commit versionné, activé par `make bootstrap`
+# (git config core.hooksPath .githooks) pour être partagé entre clones.
+#
+# Lance la vérification rapide (lint + frontières d'import, types). Les tests
+# et les drills restent dans `make verify-all` et en CI.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+make --no-print-directory verify-fast
