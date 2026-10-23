@@ -60,6 +60,19 @@ Les drills tournent dans une copie jetable (`scripts/drills/workspace.mjs`) ;
 le checkout n'est jamais modifié. Revoir cet ADR si un drill passe alors que
 la règle correspondante a été retirée.
 
+## Amendement du 2026-10-24 — racine de composition (revues phase/1)
+
+La table ci-dessus autorise à `src/lib/` : `domain`, `ports`, `lib` —
+pas `adapters`. Or l'assemblage exige un point unique qui câble les
+ports vers leurs adaptateurs (`docs/contrats-ports.md` §10). Trancher :
+`src/lib/container.ts` est la **racine de composition**, seul module
+autorisé à importer `@/adapters/*`. Tout autre import d'adaptateur
+hors de ce fichier reste interdit et doit être déplacé dans le
+conteneur. La configuration ESLint ne distingue pas ce fichier
+(l'arête `lib → adapters` reste techniquement permise hors
+conteneur) : c'est un point de revue humaine, pas une règle
+automatisée — les drills `deny`/`permit` sont inchangés.
+
 ## Retirement
 
 Retirer ou revoir si le projet passe à un découpage par fonctionnalité

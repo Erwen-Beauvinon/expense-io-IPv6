@@ -1,0 +1,180 @@
+{
+  "employee": {
+    "C01_list": {
+      "status": 200,
+      "body": [
+        {
+          "id": "<uuid>",
+          "userId": "<uuid>",
+          "amount": 42.5,
+          "expenseDate": "2026-10-22",
+          "description": "Taxi aéroport (seed)",
+          "receiptKey": "<receiptKey>",
+          "status": "pending",
+          "createdAt": "<isoDate>"
+        }
+      ]
+    },
+    "C03_suggest": {
+      "status": 200,
+      "body": {}
+    },
+    "C04_receipt": {
+      "status": 200,
+      "body": {
+        "url": "<signedUrl>"
+      }
+    },
+    "C02_submit": {
+      "status": 201,
+      "body": {
+        "id": "<uuid>",
+        "userId": "<uuid>",
+        "amount": 12.5,
+        "expenseDate": "2026-10-01",
+        "description": "Taxi golden",
+        "receiptKey": "<receiptKey>",
+        "status": "pending",
+        "createdAt": "<isoDate>"
+      }
+    }
+  },
+  "manager": {
+    "C01_list": {
+      "status": 200,
+      "body": [
+        {
+          "id": "<uuid>",
+          "userId": "<uuid>",
+          "amount": 5.9,
+          "expenseDate": "2026-10-22",
+          "description": "Café client (seed)",
+          "receiptKey": "<receiptKey>",
+          "status": "pending",
+          "createdAt": "<isoDate>"
+        }
+      ]
+    },
+    "C03_suggest": {
+      "status": 200,
+      "body": {}
+    },
+    "C04_receipt": {
+      "status": 200,
+      "body": {
+        "url": "<signedUrl>"
+      }
+    },
+    "C05_list": {
+      "status": 200,
+      "body": [
+        {
+          "id": "<uuid>",
+          "userId": "<uuid>",
+          "amount": 42.5,
+          "expenseDate": "2026-10-22",
+          "description": "Taxi aéroport (seed)",
+          "receiptKey": "<receiptKey>",
+          "status": "pending",
+          "createdAt": "<isoDate>"
+        }
+      ]
+    },
+    "C06_receipt": {
+      "status": 200,
+      "body": {
+        "url": "<signedUrl>"
+      }
+    },
+    "C07_reject": {
+      "status": 200,
+      "body": {
+        "id": "<uuid>",
+        "userId": "<uuid>",
+        "amount": 42.5,
+        "expenseDate": "2026-10-22",
+        "description": "Taxi aéroport (seed)",
+        "receiptKey": "<receiptKey>",
+        "status": "rejected",
+        "createdAt": "<isoDate>"
+      }
+    }
+  },
+  "hr": {
+    "C01_list": {
+      "status": 200,
+      "body": []
+    },
+    "C03_suggest": {
+      "status": 200,
+      "body": {}
+    },
+    "C04_receipt": {
+      "status": "skip",
+      "body": null
+    },
+    "C08_users": {
+      "status": 200,
+      "body": [
+        {
+          "id": "<uuid>",
+          "name": "Demo",
+          "email": "demo@expense.io",
+          "role": "employee",
+          "managerId": "<uuid>"
+        },
+        {
+          "id": "<uuid>",
+          "name": "Manager",
+          "email": "manager@expense.io",
+          "role": "manager",
+          "managerId": null
+        }
+      ]
+    },
+    "C09_list": {
+      "status": 200,
+      "body": [
+        {
+          "id": "<uuid>",
+          "userId": "<uuid>",
+          "amount": 5.9,
+          "expenseDate": "2026-10-22",
+          "description": "Café client (seed)",
+          "receiptKey": "<receiptKey>",
+          "status": "pending",
+          "createdAt": "<isoDate>"
+        }
+      ]
+    },
+    "C11_assign_same": {
+      "status": 200,
+      "body": {
+        "id": "<uuid>",
+        "name": "Demo",
+        "email": "demo@expense.io",
+        "role": "employee",
+        "managerId": "<uuid>"
+      }
+    },
+    "C10_receipt": {
+      "status": 200,
+      "body": {
+        "url": "<signedUrl>"
+      }
+    },
+    "C11_reject": {
+      "status": 200,
+      "body": {
+        "id": "<uuid>",
+        "userId": "<uuid>",
+        "amount": 5.9,
+        "expenseDate": "2026-10-22",
+        "description": "Café client (seed)",
+        "receiptKey": "<receiptKey>",
+        "status": "rejected",
+        "createdAt": "<isoDate>"
+      }
+    }
+  }
+}
