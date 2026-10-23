@@ -87,6 +87,11 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       DATABASE_URL: postgres://expense:expense@localhost:5433/expense_io
+      # Rôle applicatif réel (revue phase/8 §1, ADR-DATA-002) : le
+      # serveur Next et les tests d'intégration s'y connectent —
+      # la RLS est exercée, plus contournée. Migrate/seed gardent
+      # DATABASE_URL (compte d'administration).
+      APP_DATABASE_URL: postgres://expense_app:expense_app_dev_only@localhost:5433/expense_io
       # Secret de test pour le build/run E2E uniquement (jamais en
       # production) : exigé depuis la phase 0 (secret JWT hors du code).
       AUTH_SECRET: ci-e2e-dummy-secret

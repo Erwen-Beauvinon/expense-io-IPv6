@@ -23,10 +23,10 @@ describe('traducteur d’erreurs (contrats-ports §7)', () => {
     expect(await reponse.json()).toEqual({ error: erreur.message })
   })
 
-  // Phase 1 : la 500 expose encore le message technique et la stack
-  // (état P0). Durci en phase 8 : 500 générique « Erreur interne »,
-  // sans stack ni détail (voir le test final de tests/unit/lib).
-  it('500 : message technique et stack visibles (durcis en phase 8)', async () => {
+  // Phase 8 : la 500 est générique — ni message technique (connexion,
+  // pilote, chemin) ni stack ne quittent le serveur. Le détail reste
+  // dans les logs (console.error du traducteur).
+  it('ne laisse jamais sortir de stack ni de détail en 500', async () => {
     const erreur = new Error('boom')
     erreur.stack = 'stack-trace-interne'
     const reponse = respondErreurMetier(
@@ -35,9 +35,6 @@ describe('traducteur d’erreurs (contrats-ports §7)', () => {
     expect(reponse.status).toBe(400)
     const generique = respondError(erreur)
     expect(generique.status).toBe(500)
-    expect(await generique.json()).toEqual({
-      error: 'boom',
-      stack: 'stack-trace-interne',
-    })
+    expect(await generique.json()).toEqual({ error: 'Erreur interne' })
   })
 })
