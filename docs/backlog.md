@@ -13,6 +13,6 @@ fonctionnalités. Statuts : `open`, `partial`, `resolved`.
 | 005 | open | Les fonctions d'analyse OCR (`parseAmount`, `parseExpenseDate`) ne sont pas exportées, donc non testées. | Les exporter ou tester via `suggestFields` avec des images de référence. |
 | 006 | open | `next build` ne fait pas partie de `make verify`. | Ajouter un job CI `make build` si le temps de CI le permet. |
 | 007 | open | CODEOWNERS contient des équipes fictives ; protection de branche non configurée. | Renseigner de vrais handles et activer les revues obligatoires. |
-| 008 | open | Le workflow `security.yml` n'a jamais tourné : résultat de gitleaks sur l'historique inconnu. | Lancer une première fois et traiter les alertes. |
+| 008 | resolved | Le workflow `security.yml` a tourné sur la PR d'intégration (2026-10-22) : dependency-review et gitleaks verts sur l'historique. | — |
 | 009 | open | L'audit `ai-ready audit` ne détecte que import-linter (Python) : les frontières ESLint y restent `unknown` alors qu'elles sont démontrées par drill. | Limite du toolkit amont. |
 | 010 | open | Aucune mesure comparative de performance des agents. | Protocole `benchmarks/` d'ai-ready-repo. |

@@ -51,7 +51,7 @@ Toute violation sort en erreur `no-restricted-imports` avec le préfixe
 ## Firing condition
 
 ```
-make drill-boundaries-deny     # 12 arêtes interdites plantées → toutes rejetées
+make drill-boundaries-deny     # 22 arêtes interdites plantées → toutes rejetées (alias, relatifs, dynamiques, builtins)
 make drill-boundaries-permit   # 7 arêtes légales → aucune rejetée
 make drill-boundaries-reason   # une erreur de syntaxe n'est pas prise pour une violation
 ```

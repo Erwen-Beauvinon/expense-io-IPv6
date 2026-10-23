@@ -20,6 +20,17 @@ const FORBIDDEN = [
   ['src/adapters', "import { NavItem } from '@/components/NavItem'"],
   ['src/components', "import { getPool } from '@/lib/db'"],
   ['src/components', "import { S3Client } from '@aws-sdk/client-s3'"],
+  // Contournements vus en revue : relatifs, dynamiques, builtins, alias bare.
+  ['src/components', "import { getPool } from '../lib/db'"],
+  ['src/components', "import { S3ReceiptAdapter } from '../adapters/S3ReceiptAdapter'"],
+  ['src/lib', "import { NavItem } from '../components/NavItem'"],
+  ['src/ports', "import { getPool } from '../lib/db'"],
+  ['src/domain', "import fs from 'node:fs'"],
+  ['src/domain', "import { formatCurrency } from '@/utils'"],
+  ['src/utils', "import { ExpenseNote } from '../domain/ExpenseNote'"],
+  ['src/components', "export const load = () => import('@/lib/db')"],
+  ['src/components', "export const load = () => import('../lib/db')"],
+  ['src/domain', "export const load = () => import('node:fs')"],
 ]
 
 const PERMITTED = [
@@ -36,8 +47,14 @@ const PERMITTED = [
 function lintProbes(dir, cases) {
   const probes = cases.map(([layer, statement], index) => {
     const file = path.join(layer, `__drill_${index}__.ts`)
-    const binding = statement.match(/\{\s*(?:type\s+)?(\w+)/)[1]
-    writeFileSync(path.join(dir, file), `${statement}\nexport const probe = ${binding}\n`)
+    if (statement.startsWith('export ')) {
+      // Sonde brute (import dynamique) : déjà un module complet.
+      writeFileSync(path.join(dir, file), `${statement}\n`)
+    } else {
+      const binding = (statement.match(/\{\s*(?:type\s+)?(\w+)/) ??
+        statement.match(/import\s+(?:type\s+)?(\w+)\s+from/))[1]
+      writeFileSync(path.join(dir, file), `${statement}\nexport const probe = ${binding}\n`)
+    }
     return { file, layer, statement }
   })
   const { stdout } = run(dir, bin(dir, 'eslint'), [
@@ -54,7 +71,9 @@ function lintProbes(dir, cases) {
   })
 }
 
-const isBoundary = (m) => m.ruleId === 'no-restricted-imports' && m.message.includes('ADR-ARCH-001')
+const isBoundary = (m) =>
+  (m.ruleId === 'no-restricted-imports' || m.ruleId === 'no-restricted-syntax') &&
+  m.message.includes('ADR-ARCH-001')
 
 const mode = process.argv[2]
 withWorkspace((dir) => {
