@@ -22,17 +22,17 @@ function statutErreurMetier(error: ErreurMetier): number {
 }
 
 export function respondErreurMetier(error: ErreurMetier): Response {
-  // Pas de log ici : les erreurs métier (4xx) sont des réponses
-  // normales, seul respondError journalise (pannes 500).
+  // Pas de log ici (revue phase/1 §6) : les erreurs métier (4xx) sont
+  // des réponses normales, seul respondError journalise (pannes 500).
   return Response.json({ error: error.message }, { status: statutErreurMetier(error) })
 }
 
-// Panne d'infrastructure ou erreur inattendue : 500 générique, sans stack
-// (le message détaillé reste dans les logs serveur).
+// Panne d'infrastructure ou erreur inattendue : 500 générique.
+// Ni message technique (connexion, pilote, chemin) ni stack ne
+// quittent le serveur : le détail reste dans les logs (phase 8,
+// audit : « messages publics séparés des logs internes »).
 export function respondError(error: unknown): Response {
   if (estErreurMetier(error)) return respondErreurMetier(error)
   console.error(error)
-  const message = error instanceof Error ? error.message : String(error)
-  const stack = error instanceof Error ? error.stack : undefined
-  return Response.json({ error: message, stack }, { status: 500 })
+  return Response.json({ error: 'Erreur interne' }, { status: 500 })
 }

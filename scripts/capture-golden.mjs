@@ -20,33 +20,42 @@ function normalize(value) {
     if (typeof out.receiptKey === 'string') out.receiptKey = '<receiptKey>'
     if (typeof out.url === 'string') out.url = '<signedUrl>'
     if (typeof out.createdAt === 'string') out.createdAt = '<isoDate>'
-    // Les notes décidées portent déjà decided_by/at en base ? Non : pas de
-    // colonnes à cette révision — si présentes un jour, elles resteraient
-    // internes et absentes du JSON. Rien à normaliser.
+    // Les colonnes decided_by/at (migration 0002) restent internes :
+    // absentes du JSON, rien à normaliser.
     return out
   }
   return value
 }
 
+// Set-Cookie robuste (revue phase/1 §5) : `Expires=Wed, 21 Oct…`
+// contient une virgule — découper sur les en-têtes réels quand
+// disponibles, sinon sur les virgules qui ouvrent un nouveau cookie.
+function cookiesDe(reponse) {
+  const parGet = reponse.headers.getSetCookie?.()
+  if (Array.isArray(parGet) && parGet.length > 0) return parGet
+  const brut = reponse.headers.get('set-cookie') || ''
+  return brut.split(/, (?=[A-Za-z0-9_-]+=)/)
+}
+
 async function login({ email, password }) {
   const csrfRes = await fetch(`${BASE}/api/auth/csrf`)
   const { csrfToken } = await csrfRes.json()
-  const cookies = csrfRes.headers.get('set-cookie') || ''
+  const cookies = cookiesDe(csrfRes)
   const body = new URLSearchParams({ csrfToken, email, password, json: 'true' })
   const res = await fetch(`${BASE}/api/auth/callback/credentials`, {
     method: 'POST',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
-      cookie: cookies.split(',').map((c) => c.split(';')[0]).join('; '),
+      cookie: cookies.map((c) => c.split(';')[0]).join('; '),
     },
     body,
     redirect: 'manual',
   })
-  const setCookie = res.headers.get('set-cookie') || ''
+  const setCookie = cookiesDe(res)
   if (res.status !== 200 && res.status !== 302) {
     throw new Error(`login ${email} -> ${res.status}: ${await res.text()}`)
   }
-  const jar = [...cookies.split(','), ...setCookie.split(',')]
+  const jar = [...cookies, ...setCookie]
     .map((c) => c.split(';')[0].trim())
     .filter(Boolean)
     .join('; ')
@@ -142,11 +151,9 @@ for (const role of Object.keys(USERS)) {
   f.set('expenseDate', '2026-10-01')
   f.set('description', 'Taxi golden')
   f.set('receipt', new File([png1x1], 'r.png', { type: 'image/png' }))
+  // La clé du reçu est normalisée par normalize() (<receiptKey>) :
+  // aucun remplacement ad hoc ici (revue phase/1 §5).
   out.employee.C02_submit = await api('/api/expense-notes', { method: 'POST', body: f })
-  const b = out.employee.C02_submit.body
-  if (b && typeof b === 'object' && typeof b.receiptKey === 'string') {
-    b.receiptKey = b.receiptKey.replace(/receipts\/\d+/, 'receipts/<seq>')
-  }
   // Entrée invalide (revue phase/5 §3, contrat §5) : 400 au texte acté,
   // sans écriture — le seed reste identique pour les captures suivantes.
   const fInvalide = new FormData()

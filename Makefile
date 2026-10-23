@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 COMPOSE := docker compose
 
-.PHONY: help install env up down restart logs migrate ensure-bucket seed dev build start lint typecheck clean \
+.PHONY: help install env up down restart logs migrate ensure-bucket seed dev build start lint typecheck clean golden \
 	bootstrap check-env test e2e-install test-e2e validate-adrs verify-fast verify drills verify-all
 
 help: ## Affiche cette aide
@@ -90,6 +90,9 @@ e2e-install: ## Installe le navigateur Chromium de Playwright (une fois)
 
 test-e2e: up migrate ensure-bucket ## Tests E2E Playwright (Docker requis ; démarre `next dev` si besoin)
 	npm run test:e2e
+
+golden: ## Capture le contrat client et compare au golden de référence (serveur + seed requis, BASE en option)
+	BASE=$${BASE:-http://localhost:3101} node scripts/capture-golden.mjs > /tmp/golden.live.json && node scripts/check-golden.mjs /tmp/golden.live.json
 
 validate-adrs: ## Vérifie le format des ADR (docs/adr/)
 	@node scripts/validate-adrs.mjs
