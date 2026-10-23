@@ -124,6 +124,11 @@ jobs:
       - name: E2E (next start)
         run: npm run test:e2e
 
+      # Tests d'intégration rejouables (revues phases/7-8) : PostgreSQL
+      # éphémère du job déjà migré ci-dessus, RLS et I14 prouvés ici.
+      - name: Integration (PostgreSQL éphémère)
+        run: RUN_INTEGRATION=1 npx vitest run tests/integration
+
       - name: Rapport Playwright
         if: failure()
         uses: actions/upload-artifact@v4
