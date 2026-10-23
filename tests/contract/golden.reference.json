@@ -37,6 +37,12 @@
         "status": "pending",
         "createdAt": "<isoDate>"
       }
+    },
+    "C02_invalid": {
+      "status": 400,
+      "body": {
+        "error": "Montant invalide"
+      }
     }
   },
   "manager": {

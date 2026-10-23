@@ -2,6 +2,17 @@ import type { Acteur } from '@/domain/Acteur'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
+import type { Transaction } from '@/domain/Transaction'
+
+// Entrée de création (phase 5) : déjà validée par SoumettreNote
+// (montant I1, date I2, reçu I4). Le reçu est envoyé avant.
+export interface NouvelleNote {
+  auteurId: string
+  montant: number
+  dateDepense: string
+  description: string
+  receiptKey: string
+}
 
 // Port ExpenseNoteRepository (docs/contrats-ports.md §3) : persister et
 // relire les notes, toujours dans le périmètre d'un acteur ou d'une
@@ -42,4 +53,14 @@ export interface ExpenseNoteRepository {
   // managés directs ; RH : toute l'entreprise. N+1 exclu (repli propre
   // jusqu'à l'alignement RLS, phase 8).
   listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]>
+
+  // Phase 5 : réserve un numéro de séquence pour la clé du reçu
+  // (format gelé receipts/{seq}, contrat client §4). Un trou après
+  // échec est sans signification.
+  reserverSequence(): Promise<number>
+
+  // Phase 5 : crée la note dans la transaction remise (I4). Le reçu
+  // a déjà été envoyé ; toute erreur après l'envoi déclenche sa
+  // compensation (suppression) côté cas d'usage.
+  creer(tx: Transaction, entree: NouvelleNote): Promise<NoteAvecAuteur>
 }
