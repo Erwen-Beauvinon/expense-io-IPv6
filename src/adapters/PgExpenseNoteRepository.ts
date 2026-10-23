@@ -1,6 +1,7 @@
 import type { Acteur } from '@/domain/Acteur'
 import { ExpenseNote } from '@/domain/ExpenseNote'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
+import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
 import { withUserScope } from '@/lib/db'
 import type { ExpenseNoteRepository } from '@/ports/ExpenseNoteRepository'
@@ -85,6 +86,107 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
       const result = await client.query<LigneNote>(
         `${SELECT_AVEC_AUTEUR} WHERE en.user_id = $1 ORDER BY ${ORDRE_SQL[tri]}`,
         [auteurId]
+      )
+      return result.rows.map(versNoteAvecAuteur)
+    })
+  }
+
+  async trancherSiEnAttente(
+    acteur: Acteur,
+    noteId: string,
+    decision: Decision,
+    motif: string | null
+  ): Promise<boolean> {
+    // Phase 4 (revues) : écriture conditionnelle unique (I6) +
+    // traçabilité interne (migration 0002). Le WHERE réplique la
+    // règle PolitiqueAcces (tableau ADR-ARCH-002) : entreprise de
+    // l'auteur + valideur courant — direct, N+1, ou RH des cas
+    // lignes 2-3 — vérifiés sur les lignes `users` (rôles lus en
+    // base, jamais le jeton). L'autorisation reste d'abord vérifiée
+    // par le cas d'usage (404 propre) ; l'écriture la réévalue
+    // atomiquement. `decided_at` vient de now() SQL (horloge unique).
+    // Une seule décision gagne la course ; la perdante (déjà tranchée
+    // ou valideur perdu entre-temps) rend false → 409.
+    return withUserScope(acteur.id, async (client) => {
+      const ecrit = await client.query(
+        `UPDATE expense_notes AS en
+         SET status = $1, decided_by = $2, decided_at = now(), decision_reason = $3
+         WHERE en.id = $4 AND en.status = 'pending'
+         AND en.user_id <> $2
+         AND EXISTS (
+           SELECT 1
+           FROM users AS a
+           LEFT JOIN users AS m ON m.id = a.manager_id
+           WHERE a.id = en.user_id
+             AND a.company_id = $5
+             AND (
+               EXISTS (
+                 SELECT 1 FROM users AS direct
+                 WHERE direct.id = a.manager_id
+                   AND direct.role = 'manager'
+                   AND direct.id = $2
+                   AND direct.company_id = $5
+               )
+               OR EXISTS (
+                 SELECT 1 FROM users AS direct
+                 JOIN users AS superieur ON superieur.id = direct.manager_id
+                 WHERE direct.id = a.manager_id
+                   AND direct.role = 'manager'
+                   AND superieur.id = $2
+                   AND superieur.role = 'manager'
+                   AND superieur.company_id = $5
+               )
+               OR (
+                 EXISTS (
+                   SELECT 1 FROM users AS h
+                   WHERE h.id = $2
+                     AND h.role = 'hr_admin'
+                     AND h.company_id = $5
+                 )
+                 AND (
+                   a.role = 'hr_admin'
+                   OR a.manager_id IS NULL
+                   OR m.id IS NULL
+                   OR NOT (m.role = 'manager' AND m.manager_id IS NOT NULL)
+                 )
+               )
+             )
+         )`,
+        [decision, acteur.id, motif, noteId, acteur.companyId]
+      )
+      return (ecrit.rowCount ?? 0) > 0
+    })
+  }
+
+  async listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]> {
+    // Phase 4 (revues) : files déduites du rattachement courant
+    // (tableau ADR-ARCH-002), tri croissant comme les anciennes
+    // requêtes. Manager : managés directs ET indirects (N+1, même
+    // droit). RH : file de routage — auteurs sans manager (managers
+    // racines, employés non rattachés, notes de RH), hors ses propres
+    // notes (I7). Le pouvoir complet (ex. RH valideur d'une équipe
+    // racine, tableau ligne 2) reste accessible via l'API.
+    return withUserScope(acteur.id, async (client) => {
+      if (acteur.role === 'hr_admin') {
+        const result = await client.query<LigneNote>(
+          `${SELECT_AVEC_AUTEUR} WHERE u.company_id = $1 AND en.status = 'pending'
+           AND en.user_id <> $2
+           AND (u.manager_id IS NULL OR u.role = 'hr_admin')
+           ORDER BY en.created_at ASC`,
+          [acteur.companyId, acteur.id]
+        )
+        return result.rows.map(versNoteAvecAuteur)
+      }
+      const result = await client.query<LigneNote>(
+        `${SELECT_AVEC_AUTEUR} WHERE u.company_id = $1 AND en.status = 'pending'
+         AND (
+           u.manager_id = $2
+           OR u.manager_id IN (
+             SELECT id FROM users WHERE manager_id = $2 AND company_id = $1
+           )
+         )
+         ORDER BY en.created_at ASC`,
+        [acteur.companyId, acteur.id]
       )
       return result.rows.map(versNoteAvecAuteur)
     })
