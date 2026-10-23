@@ -7,9 +7,11 @@ import type { OrdreTri } from '@/domain/OrdreTri'
 // entreprise (I9, I10). La lecture manager/RH (peutConsulter) et les
 // écritures suivent avec les phases 3 à 5.
 export interface ExpenseNoteRepository {
-  // Phase 2 : périmètre propriétaire uniquement (l'accès manager/RH
-  // arrive en phase 3). null si absente ou hors périmètre. Jamais
-  // d'exception pour un cas métier.
+  // Phase 3 : borné à l'entreprise de l'acteur. null si absente ou
+  // hors entreprise (pas de 403 : la note d'une autre entreprise
+  // n'existe pas pour l'appelant). Jamais d'exception métier.
+  // L'autorisation fine (manager direct, RH, I8) est tranchée par la
+  // politique (PolitiqueAcces) dans les cas d'usage, pas ici.
   trouverParId(acteur: Acteur, noteId: string): Promise<NoteAvecAuteur | null>
 
   // Historique personnel : hors de son propre périmètre (appelée avec

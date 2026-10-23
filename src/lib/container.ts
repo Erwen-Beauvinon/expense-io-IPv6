@@ -1,6 +1,8 @@
 import { ConsoleNotificationAdapter } from '@/adapters/ConsoleNotificationAdapter'
+import { PgAnnuaireOrganisation } from '@/adapters/PgAnnuaireOrganisation'
 import { PgExpenseNoteRepository } from '@/adapters/PgExpenseNoteRepository'
 import { S3ReceiptAdapter } from '@/adapters/S3ReceiptAdapter'
+import type { AnnuaireOrganisation } from '@/ports/AnnuaireOrganisation'
 import type { ExpenseNoteRepository } from '@/ports/ExpenseNoteRepository'
 import type { NotificationPort } from '@/ports/NotificationPort'
 import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'
@@ -11,6 +13,7 @@ import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'
 let stockageRecus: ReceiptStoragePort | undefined
 let notificateur: NotificationPort | undefined
 let notes: ExpenseNoteRepository | undefined
+let annuaire: AnnuaireOrganisation | undefined
 
 export function getStockageRecus(): ReceiptStoragePort {
   if (!stockageRecus) stockageRecus = new S3ReceiptAdapter()
@@ -25,4 +28,9 @@ export function getNotificateur(): NotificationPort {
 export function getNotes(): ExpenseNoteRepository {
   if (!notes) notes = new PgExpenseNoteRepository()
   return notes
+}
+
+export function getAnnuaire(): AnnuaireOrganisation {
+  if (!annuaire) annuaire = new PgAnnuaireOrganisation()
+  return annuaire
 }

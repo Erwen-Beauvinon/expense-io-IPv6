@@ -1,7 +1,7 @@
+import { servirJustificatif } from '@/app/api/_partage/justificatif'
 import { auth } from '@/lib/auth'
-import { getPool } from '@/lib/db'
+import { getAnnuaire, getNotes, getStockageRecus } from '@/lib/container'
 import { respondError } from '@/lib/errors'
-import { getReceiptUrl } from '@/lib/storage'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,17 +11,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
     const { id } = await params
 
-    // La note existe forcément dans la liste des notes en attente du
-    // manager avant qu'il n'en consulte le reçu — pas besoin de revérifier
-    // le rattachement ici.
-    const result = await getPool().query('SELECT receipt_key FROM expense_notes WHERE id = $1', [id])
-    const note = result.rows[0]
-    if (!note) {
-      return Response.json({ error: 'Not found' }, { status: 404 })
-    }
-
-    const url = await getReceiptUrl(note.receipt_key)
-    return Response.json({ url })
+    // Phase 3 : la vérification « note de mon équipe » n'est plus
+    // supposée — le cas d'usage l'applique (peutConsulter, I9).
+    return servirJustificatif(session, id, {
+      notes: getNotes(),
+      annuaire: getAnnuaire(),
+      stockage: getStockageRecus(),
+    })
   } catch (error) {
     return respondError(error)
   }

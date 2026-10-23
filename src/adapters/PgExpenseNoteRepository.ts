@@ -60,16 +60,15 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string
   ): Promise<NoteAvecAuteur | null> {
-    // Phase 2 : périmètre propriétaire uniquement. L'accès manager/RH
-    // (peutConsulter, I9) est branché en phase 3.
+    // Phase 3 : périmètre entreprise (I9/I10). Le refus (null) ne dit
+    // pas si la note existe hors périmètre.
     return withUserScope(acteur.id, async (client) => {
       const result = await client.query<LigneNote>(
-        `${SELECT_AVEC_AUTEUR} WHERE en.id = $1`,
-        [noteId]
+        `${SELECT_AVEC_AUTEUR} WHERE en.id = $1 AND u.company_id = $2`,
+        [noteId, acteur.companyId]
       )
       const ligne = result.rows[0]
       if (!ligne) return null
-      if (ligne.user_id !== acteur.id) return null
       return versNoteAvecAuteur(ligne)
     })
   }
