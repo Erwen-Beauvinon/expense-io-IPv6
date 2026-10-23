@@ -1,5 +1,8 @@
+import { rattacherAuManager } from '@/application/RattacherAuManager'
+import { DonneesInvalides } from '@/domain/errors'
+import { resolveActeur } from '@/lib/actor'
 import { auth } from '@/lib/auth'
-import { getPool } from '@/lib/db'
+import { getAnnuaire, getUnitOfWork } from '@/lib/container'
 import { respondError } from '@/lib/errors'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -8,55 +11,39 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!session?.user || session.user.role !== 'hr_admin') {
       return Response.json({ error: 'Unauthorized' }, { status: 403 })
     }
+    const acteur = await resolveActeur(session)
+    if (!acteur) {
+      return Response.json({ error: 'Unauthorized' }, { status: 403 })
+    }
     const { id } = await params
-    const body = (await request.json().catch(() => null)) as { managerId?: string | null } | null
-    const managerId = body?.managerId ?? null
 
-    const hrAdminResult = await getPool().query('SELECT company_id FROM users WHERE id = $1', [
-      session.user.id,
-    ])
-    const companyId = hrAdminResult.rows[0]?.company_id
-    if (!companyId) {
-      return Response.json({ error: 'Not found' }, { status: 404 })
+    // Phase 6 (revue §2) : un corps illisible est refusé en 400 —
+    // il n'efface plus le rattachement (audit A). La clé `managerId`
+    // doit être EXPLICITEMENT présente : `{}` ou une clé mal
+    // orthographiée (`manager_id`) ne détache plus silencieusement.
+    // Seul un `null` volontaire détache. La validation métier vit
+    // dans le cas d'usage.
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      throw new DonneesInvalides('Corps invalide')
     }
-
-    const targetResult = await getPool().query(
-      `SELECT id FROM users WHERE id = $1 AND company_id = $2 AND role IN ('employee', 'manager')`,
-      [id, companyId]
-    )
-    if (!targetResult.rows[0]) {
-      return Response.json({ error: 'Not found' }, { status: 404 })
+    if (typeof body !== 'object' || body === null || !('managerId' in body)) {
+      throw new DonneesInvalides('Corps invalide')
     }
+    const managerId = (body as { managerId?: unknown }).managerId ?? null
 
-    if (managerId !== null) {
-      if (managerId === id) {
-        return Response.json({ error: 'Invalid manager' }, { status: 409 })
-      }
-      // Le manager choisi doit avoir le rôle manager — l'appartenance à la
-      // même entreprise que la cible est déjà garantie par l'annuaire
-      // (GET /api/hr/users), qui ne liste que des managers de l'entreprise
-      // de l'appelant.
-      const managerResult = await getPool().query(
-        `SELECT id FROM users WHERE id = $1 AND role = 'manager'`,
-        [managerId]
-      )
-      if (!managerResult.rows[0]) {
-        return Response.json({ error: 'Invalid manager' }, { status: 409 })
-      }
-    }
-
-    const updated = await getPool().query(
-      `UPDATE users SET manager_id = $1 WHERE id = $2
-       RETURNING id, name, email, role, manager_id`,
-      [managerId, id]
-    )
-    const user = updated.rows[0]
+    const utilisateur = await rattacherAuManager(acteur, id, managerId, {
+      annuaire: getAnnuaire(),
+      unitOfWork: getUnitOfWork(),
+    })
     return Response.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      managerId: user.manager_id,
+      id: utilisateur.id,
+      name: utilisateur.name,
+      email: utilisateur.email,
+      role: utilisateur.role,
+      managerId: utilisateur.managerId,
     })
   } catch (error) {
     return respondError(error)
