@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, V2]
   pull_request:
-    branches: [main]
+    branches: [main, V2]
 
 # Les deux jobs ne font que lire le dépôt : jeton en lecture seule.
 permissions:
@@ -58,3 +58,73 @@ jobs:
 
       - name: drill-fork-guard
         run: make drill-fork-guard
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    # Mêmes images et ports que docker-compose.yml : les commandes et le .env
+    # local restent valables tels quels.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: expense
+          POSTGRES_PASSWORD: expense
+          POSTGRES_DB: expense_io
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U expense -d expense_io"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      localstack:
+        image: localstack/localstack:3.8.1
+        env:
+          SERVICES: s3
+        ports:
+          - 4567:4566
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://expense:expense@localhost:5433/expense_io
+      S3_ENDPOINT: http://localhost:4567
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: test
+      S3_SECRET_ACCESS_KEY: test
+      S3_BUCKET: receipts
+      S3_FORCE_PATH_STYLE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (lockfile)
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # `npm run migrate:up` exige un fichier .env (--envPath) : en CI les
+      # variables sont déjà dans l'environnement du job.
+      - name: Migrations
+        run: npx node-pg-migrate up
+
+      - name: S3 bucket
+        run: npm run ensure-bucket
+
+      - name: Build
+        run: npm run build
+
+      - name: E2E (next start)
+        run: npm run test:e2e
+
+      - name: Rapport Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

@@ -4,7 +4,7 @@ SHELL := /bin/bash
 COMPOSE := docker compose
 
 .PHONY: help install env up down restart logs migrate ensure-bucket seed dev build start lint typecheck clean \
-	bootstrap check-env test validate-adrs verify-fast verify drills verify-all
+	bootstrap check-env test e2e-install test-e2e validate-adrs verify-fast verify drills verify-all
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-26s\033[0m %s\n", $$1, $$2}'
@@ -74,6 +74,12 @@ typecheck: ## Vérifie les types
 
 test: ## Tests unitaires (Vitest, sans Docker)
 	npm test
+
+e2e-install: ## Installe le navigateur Chromium de Playwright (une fois)
+	npx playwright install chromium
+
+test-e2e: up migrate ensure-bucket ## Tests E2E Playwright (Docker requis ; démarre `next dev` si besoin)
+	npm run test:e2e
 
 validate-adrs: ## Vérifie le format des ADR (docs/adr/)
 	@node scripts/validate-adrs.mjs
