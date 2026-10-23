@@ -64,6 +64,8 @@ test.describe('Employé', () => {
     const popupPromise = page.context().waitForEvent('page')
     await noteRow(page, 'Hôtel Lyon').getByRole('button', { name: 'Voir le reçu' }).click()
     const popup = await popupPromise
+    // La popup naît sur about:blank : attendre l'URL signée avant de la lire.
+    await popup.waitForURL(/\/receipts\/receipts\/\d+\.png\?/)
 
     // URL signée vers le bucket : le fichier est servi et c'est bien le reçu.
     expect(popup.url()).toMatch(/\/receipts\/receipts\/\d+\.png\?/)

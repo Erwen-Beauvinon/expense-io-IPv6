@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, V2]
   pull_request:
-    branches: [main]
+    branches: [main, V2]
 
 # Les deux jobs ne font que lire le dépôt : jeton en lecture seule.
 permissions:
