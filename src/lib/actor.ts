@@ -1,24 +1,21 @@
 import type { Session } from 'next-auth'
+import type { Acteur } from '@/domain/Acteur'
 import { getPool } from '@/lib/db'
 
-// Acteur serveur (docs/contrats-ports.md §1.2) : identité + rôle +
-// entreprise, construits côté serveur depuis la session. Jamais depuis
-// le corps d'une requête.
-export interface Acteur {
-  id: string
-  role: 'employee' | 'manager' | 'hr_admin'
-  companyId: string
-}
+export type { Acteur }
 
 export async function resolveActeur(session: Session | null): Promise<Acteur | null> {
-  if (!session?.user?.id || !session.user.role) return null
+  if (!session?.user?.id) return null
 
-  const result = await getPool().query<{ company_id: string }>(
-    'SELECT company_id FROM users WHERE id = $1',
-    [session.user.id]
-  )
-  const companyId = result.rows[0]?.company_id
-  if (!companyId) return null
+  // Le rôle est relu en base à chaque requête : un rôle retiré ne
+  // survit pas au jeton (revues phase/1). La table `users` n'a pas
+  // de RLS (ADR-DATA-001) : lecture directe, pas besoin d'annuaire.
+  const result = await getPool().query<{
+    company_id: string
+    role: 'employee' | 'manager' | 'hr_admin'
+  }>('SELECT company_id, role FROM users WHERE id = $1', [session.user.id])
+  const ligne = result.rows[0]
+  if (!ligne) return null
 
-  return { id: session.user.id, role: session.user.role, companyId }
+  return { id: session.user.id, role: ligne.role, companyId: ligne.company_id }
 }
