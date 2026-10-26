@@ -1,3 +1,4 @@
+import { ROLES_RATTACHABLES } from '@/domain/Hierarchie'
 import type { Transaction } from '@/ports/UnitOfWork'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 import { getPool } from '@/lib/db'
@@ -76,7 +77,7 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
 
   async listerCollaborateurs(companyId: string): Promise<UtilisateurAnnuaire[]> {
     // Phase 6 : annuaire des collaborateurs gérés (employés + managers),
-    // à l'identique de l'ancienne route (WHERE role IN ... de main) :
+    // rôles rattachables du domaine (ROLES_RATTACHABLES), comme l'ancienne route :
     // les comptes RH n'y figurent pas (C08 gelé à 2 utilisateurs en
     // démo). Lecture bornée à l'entreprise, sans jointure Notes.
     const result = await getPool().query<{
@@ -88,9 +89,9 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
       email: string
     }>(
       `SELECT id, company_id, role, manager_id, name, email FROM users
-       WHERE company_id = $1 AND role IN ('employee', 'manager')
+       WHERE company_id = $1 AND role = ANY($2::text[])
        ORDER BY name`,
-      [companyId]
+      [companyId, [...ROLES_RATTACHABLES]]
     )
     return result.rows.map((ligne) => ({
       id: ligne.id,

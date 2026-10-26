@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { peutEtreDesigneManagerDe } from '@/domain/Hierarchie'
 import { LONGUEUR_MAX_MOTIF, motifDeRejetRenseigne } from '@/domain/Motif'
 
 interface CompanyUser {
@@ -71,7 +72,6 @@ export function AdminConsole() {
     loadNotes()
   }, [loadUsers, loadNotes])
 
-  const managers = users.filter((user) => user.role === 'manager')
 
   async function handleManagerChange(userId: string, managerId: string) {
     setSavingId(userId)
@@ -187,8 +187,8 @@ export function AdminConsole() {
                         className={selectClass}
                       >
                         <option value="">— aucun (racine) —</option>
-                        {managers
-                          .filter((manager) => manager.id !== user.id)
+                        {users
+                          .filter((candidat) => peutEtreDesigneManagerDe(candidat, user.id))
                           .map((manager) => (
                             <option key={manager.id} value={manager.id}>
                               {manager.name}

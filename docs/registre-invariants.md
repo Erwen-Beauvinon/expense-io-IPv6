@@ -339,10 +339,10 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   manager choisi est recherché par `id` + rôle seuls, sans
   `company_id` (`src/app/api/hr/users/[id]/manager/route.ts:39-42`) ;
   le commentaire voisin affirme le contraire de ce que fait le code.
-- **État implémenté (V2)** : tenu. La lecture du manager désigné est
-  bornée à l'entreprise de l'acteur : un manager d'une autre entreprise
-  est introuvable → `409 Invalid manager`. La condition « même
-  entreprise » reste implicite (lot 2 : règle explicite).
+- **État implémenté (V2)** : tenu. Règle explicite du domaine :
+  `verifierManagerEligible` (`src/domain/Hierarchie.ts`) exige la même
+  entreprise que le collaborateur, en plus de la lecture de l'annuaire
+  bornée à l'entreprise → `409 Invalid manager`.
 - **Tests** : A/I — RH de A tente de rattacher son employé à un
   manager de B : refus, rattachement inchangé.
 
@@ -356,10 +356,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   observation mutation RH.
 - **À `265924b`** : violé. Seul l'auto-rattachement direct est bloqué
   (`managerId === id` → 409) ; aucun contrôle transitif.
-- **État implémenté (V2)** : tenu. `detecterCycle` remonte la chaîne
+- **État implémenté (V2)** : tenu. `RattacherAuManager` lit la chaîne
   sous verrou consultatif par entreprise (`verrouillerRattachements`),
-  dans la transaction du rattachement → `409 Cycle hiérarchique
-  détecté`.
+  dans la transaction du rattachement ; la règle est la fonction pure
+  `creeraitUnCycle` du domaine → `409 Cycle hiérarchique détecté`. Tests
+  : `tests/unit/domain/hierarchie.test.ts`.
 - **Garantie cible** : domaine Organisation, parcours de la chaîne
   avant écriture, dans la transaction du cas d'usage. Tranché en
   revue phase/6 : verrou consultatif transactionnel par entreprise
@@ -385,9 +386,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   audit A, observations.
 - **À `265924b`** : partiellement tenu (rôle et auto-rattachement
   contrôlés), violé sur le corps invalide (voir statut).
-- **État implémenté (V2)** : tenu. Rôle `manager` exigé,
-  auto-rattachement refusé (`409 Invalid manager`) ; corps JSON invalide
-  → `400 Corps invalide`, rattachement inchangé.
+- **État implémenté (V2)** : tenu. Domaine (`Hierarchie`) : cible
+  rattachable (`ROLES_RATTACHABLES`, jamais un RH), pas
+  d'auto-rattachement, rôle `manager` exigé (`409 Invalid manager`) ;
+  corps JSON invalide → `400 Corps invalide`, rattachement inchangé. La
+  console RH et l'annuaire utilisent les mêmes règles.
 - **Tests** : A — désigner un `employee` ou soi-même : refus ;
   corps JSON mal formé : `400`, rattachement inchangé. C — le succès
   conserve la forme utilisateur gelée.
