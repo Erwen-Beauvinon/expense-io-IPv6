@@ -1,15 +1,14 @@
 import { suggererChamps } from '@/application/SuggererChamps'
 import { horsGabaritSuggestion } from '@/domain/Justificatif'
+import { ESPACE_PERSONNEL, refusEspace } from '@/app/api/_partage/espace'
 import { auth } from '@/lib/auth'
 import { getAnalyseur } from '@/lib/container'
 import { respondError } from '@/lib/errors'
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const refus = refusEspace(await auth(), ESPACE_PERSONNEL)
+    if (refus) return refus
 
     const formData = await request.formData()
     const receipt = formData.get('receipt')

@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { consulterMesNotes } from '@/application/ConsulterMesNotes'
 import { soumettreNote } from '@/application/SoumettreNote'
 import { verifierContenantRecu } from '@/domain/Justificatif'
-import { resolveActeur } from '@/lib/actor'
+import { ouvrirEspace, ESPACE_PERSONNEL } from '@/app/api/_partage/espace'
 import { auth } from '@/lib/auth'
 import { getNotes, getStockageRecus, getUnitOfWork } from '@/lib/container'
 import { toExpenseNoteView } from '@/lib/serialisation'
@@ -11,14 +11,8 @@ import { respondError } from '@/lib/errors'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const acteur = await resolveActeur(session)
-    if (!acteur) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const acteur = await ouvrirEspace(await auth(), ESPACE_PERSONNEL)
+    if (acteur instanceof Response) return acteur
 
     // Phase 2 : historique personnel via le cas d'usage (tri fermé :
     // toute valeur hors liste est refusée en 400 ; le client web
@@ -37,14 +31,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const acteur = await resolveActeur(session)
-    if (!acteur) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const acteur = await ouvrirEspace(await auth(), ESPACE_PERSONNEL)
+    if (acteur instanceof Response) return acteur
 
     // Phase 5 : toute la validation métier (I1–I3) vit dans le domaine,
     // appliquée par SoumettreNote ; la route ne fait que l'adaptation HTTP. Réponses

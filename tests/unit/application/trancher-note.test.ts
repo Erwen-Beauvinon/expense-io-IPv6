@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { trancherNote, validerMotif } from '@/application/TrancherNote'
+import { trancherNote } from '@/application/TrancherNote'
 import type { Acteur } from '@/domain/Acteur'
 import { ExpenseNote } from '@/domain/ExpenseNote'
+import { Motif } from '@/domain/Motif'
 import {
   DejaTranchee,
   DonneesInvalides,
@@ -14,45 +15,9 @@ import type { NotificationPort } from '@/ports/NotificationPort'
 import { lireRaison } from '@/lib/serialisation'
 import { respondError } from '@/lib/errors'
 
-// Motif de rejet obligatoire (revues phase/4, ADR-ARCH-003) : longueur
-// en points de code (pas en unités UTF-16), rognage, ordre
-// autorisation-avant-motif, et distinction 409/404 des courses.
-describe('validerMotif', () => {
-  it('exige un motif non vide au rejet', () => {
-    for (const reason of [null, undefined, '', '   ']) {
-      expect(() => validerMotif('rejected', reason)).toThrow(DonneesInvalides)
-    }
-  })
-
-  it('ignore le motif absent ou blanc à l’approbation', () => {
-    for (const reason of [null, undefined, '', '   ']) {
-      expect(validerMotif('approved', reason)).toBeNull()
-    }
-  })
-
-  it('rogne le motif et refuse les non-chaînes', () => {
-    expect(validerMotif('rejected', '  Justificatif illisible  ')).toBe(
-      'Justificatif illisible'
-    )
-    expect(validerMotif('approved', '  ok  ')).toBe('ok')
-    for (const reason of [42, true, {}, ['x']]) {
-      expect(() => validerMotif('rejected', reason)).toThrow(DonneesInvalides)
-      expect(() => validerMotif('approved', reason)).toThrow(DonneesInvalides)
-    }
-  })
-
-  it('compte 500 caractères perçus, émojis inclus', () => {
-    expect(validerMotif('rejected', '😀'.repeat(500))).toBe('😀'.repeat(500))
-    expect(() => validerMotif('rejected', '😀'.repeat(501))).toThrow(
-      DonneesInvalides
-    )
-    expect(() => validerMotif('rejected', 'x'.repeat(501))).toThrow(
-      DonneesInvalides
-    )
-    expect(validerMotif('rejected', 'x'.repeat(500))).toBe('x'.repeat(500))
-  })
-})
-
+// Ordre autorisation → motif → état, et distinction 409/404 des courses
+// (revues phase/4). Les règles du motif sont testées dans le domaine
+// (tests/unit/domain/motif.test.ts).
 function noteDe(
   auteurId: string,
   auteurManagerId: string | null,
@@ -146,6 +111,21 @@ describe('trancherNote (ordre autorisation → motif)', () => {
     expect(respondError(new NoteIntrouvable('x')).status).toBe(404)
   })
 
+  it('note lue déjà tranchée : 409 par l’entité, sans écriture (I5)', async () => {
+    const deps = fauxDeps(noteDe('employe-1', 'manager-1', 'approved'))
+    await expect(
+      trancherNote(valideur, 'note-1', 'rejected', 'trop tard', deps)
+    ).rejects.toBeInstanceOf(DejaTranchee)
+    expect(deps.trancherSiEnAttente).not.toHaveBeenCalled()
+  })
+
+  it('motif invalide sur une note déjà tranchée : 400 avant 409', async () => {
+    const deps = fauxDeps(noteDe('employe-1', 'manager-1', 'rejected'))
+    await expect(
+      trancherNote(valideur, 'note-1', 'rejected', '   ', deps)
+    ).rejects.toBeInstanceOf(DonneesInvalides)
+  })
+
   it('refuse tout rôle non décideur sans fuite d’existence', async () => {
     const employe: Acteur = { id: 'employe-1', role: 'employee', companyId: 'c1' }
     const deps = fauxDeps(noteDe('employe-1', 'manager-1'))
@@ -162,8 +142,10 @@ describe('trancherNote (ordre autorisation → motif)', () => {
       valideur,
       'note-1',
       'rejected',
-      'montant incohérent'
+      expect.any(Motif)
     )
+    const motifTransmis = (deps.trancherSiEnAttente.mock.calls[0] as unknown[])[3] as Motif
+    expect(motifTransmis.valeur).toBe('montant incohérent')
     expect(deps.notifierDecision).toHaveBeenCalledWith(
       expect.objectContaining({
         noteId: 'note-1',

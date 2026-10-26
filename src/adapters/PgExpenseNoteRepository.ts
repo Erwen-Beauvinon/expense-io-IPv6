@@ -1,8 +1,10 @@
 import type { Acteur } from '@/domain/Acteur'
 import { ExpenseNote } from '@/domain/ExpenseNote'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
+import type { Motif } from '@/domain/Motif'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
+import { peutLireHistoriqueDe } from '@/domain/PolitiqueAcces'
 import type { Transaction } from '@/ports/UnitOfWork'
 import { getPool, withUserScope } from '@/lib/db'
 import type {
@@ -86,7 +88,7 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
   ): Promise<NoteAvecAuteur[]> {
     // Phase 2 : historique personnel uniquement. Les listes
     // manager/RH arrivent avec ListerNotesÀTrancher (phase 4).
-    if (acteur.id !== auteurId) return []
+    if (!peutLireHistoriqueDe(acteur, auteurId)) return []
     return withUserScope(acteur.id, async (client) => {
       const result = await client.query<LigneNote>(
         `${SELECT_AVEC_AUTEUR} WHERE en.user_id = $1 ORDER BY ${ORDRE_SQL[tri]}`,
@@ -100,7 +102,7 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null
+    motif: Motif | null
   ): Promise<boolean> {
     // Phase 4 (revues) : écriture conditionnelle unique (I6) +
     // traçabilité interne (migration 0002). Le WHERE réplique la
@@ -157,7 +159,7 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
                )
              )
          )`,
-        [decision, acteur.id, motif, noteId, acteur.companyId]
+        [decision, acteur.id, motif?.valeur ?? null, noteId, acteur.companyId]
       )
       return (ecrit.rowCount ?? 0) > 0
     })

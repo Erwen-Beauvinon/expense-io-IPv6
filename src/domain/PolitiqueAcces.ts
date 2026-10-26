@@ -1,10 +1,27 @@
 import type { Acteur } from '@/domain/Acteur'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
+import type { UserRole } from '@/domain/Role'
 
 // Politique d'accès centralisée (I7–I10, ADR-ARCH-002 `accepted`) :
 // les valideurs sont calculés depuis l'organigramme courant, jamais
 // stockés sur la note. Le N+1 a le même droit permanent que le
 // valideur direct ; un auteur ne tranche jamais sa propre note.
+
+// Rôles qui peuvent trancher une note (décider et lister les notes à
+// trancher). Les routes gardent en plus leur contrôle d'espace d'URL
+// (`/api/manager`, `/api/hr`), qui porte les codes figés 401/403 du
+// contrat client : c'est une règle d'interface, pas celle-ci.
+export const ROLES_DECIDEURS = ['manager', 'hr_admin'] as const satisfies readonly UserRole[]
+
+export function peutDecider(role: UserRole): boolean {
+  return (ROLES_DECIDEURS as readonly UserRole[]).includes(role)
+}
+
+// Historique personnel : on ne lit que ses propres notes par cette voie
+// (les valideurs passent par la file à trancher).
+export function peutLireHistoriqueDe(acteur: Acteur, auteurId: string): boolean {
+  return acteur.id === auteurId
+}
 
 export interface NoeudHierarchique {
   id: string

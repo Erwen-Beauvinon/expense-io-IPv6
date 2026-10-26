@@ -164,10 +164,14 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **À `265924b`** : tenu par les contrôles SQL copiés dans les 4 routes
   de décision et le `CHECK` de statut en base, mais l'entité
   `ExpenseNote` n'est jamais utilisée par les routes.
-- **État implémenté (V2)** : tenu par l'écriture conditionnelle `status
-  = 'pending'` de `trancherSiEnAttente` et par le `CHECK` de statut.
-  L'entité `ExpenseNote` porte la garde (`DejaTranchee`, ADR-DOMAIN-001)
-  mais `TrancherNote` ne l'invoque pas encore (lot 2).
+- **État implémenté (V2)** : tenu à deux niveaux (ADR-DOMAIN-001,
+  amendé). Règle : `ExpenseNote.approve()`/`reject()`, appelées par
+  `TrancherNote` sur la note lue, lèvent `DejaTranchee` (409) sans
+  écriture. Concurrence : l'écriture conditionnelle `status = 'pending'`
+  de `trancherSiEnAttente`. Borne : `CHECK` de statut. Tests :
+  `tests/unit/domain/ExpenseNote.test.ts`,
+  `tests/unit/application/trancher-note.test.ts`,
+  `drill-transition-guard`.
 - **Garantie cible** : transition portée par l'entité du domaine,
   invoquée par le seul cas d'usage `TrancherNote`.
 - **Tests** : D — `approve()` et `reject()` lèvent sur une note déjà

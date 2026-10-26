@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { LONGUEUR_MAX_MOTIF, motifDeRejetRenseigne } from '@/domain/Motif'
 
 interface CompanyUser {
   id: string
@@ -272,7 +273,7 @@ export function AdminConsole() {
                             <textarea
                               id={`motif-rejet-${note.id}`}
                               rows={2}
-                              maxLength={500}
+                              maxLength={LONGUEUR_MAX_MOTIF}
                               value={motifs[note.id] ?? ''}
                               onChange={(event) =>
                                 setMotifs((precedents) => ({
@@ -287,7 +288,7 @@ export function AdminConsole() {
                                 type="button"
                                 disabled={
                                   decidingId === note.id ||
-                                  (motifs[note.id] ?? '').trim().length === 0
+                                  !motifDeRejetRenseigne(motifs[note.id] ?? '')
                                 }
                                 onClick={() =>
                                   handleDecide(note.id, 'reject', motifs[note.id]?.trim())

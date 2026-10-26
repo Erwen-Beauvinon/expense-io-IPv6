@@ -1,20 +1,14 @@
 import { rattacherAuManager } from '@/application/RattacherAuManager'
 import { DonneesInvalides } from '@/domain/errors'
-import { resolveActeur } from '@/lib/actor'
+import { ouvrirEspace, ESPACE_RH } from '@/app/api/_partage/espace'
 import { auth } from '@/lib/auth'
 import { getAnnuaire, getUnitOfWork } from '@/lib/container'
 import { respondError } from '@/lib/errors'
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await auth()
-    if (!session?.user || session.user.role !== 'hr_admin') {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-    const acteur = await resolveActeur(session)
-    if (!acteur) {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
+    const acteur = await ouvrirEspace(await auth(), ESPACE_RH)
+    if (acteur instanceof Response) return acteur
     const { id } = await params
 
     // Phase 6 (revue §2) : un corps illisible est refusé en 400 —

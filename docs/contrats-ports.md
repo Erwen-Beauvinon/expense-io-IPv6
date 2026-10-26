@@ -109,9 +109,8 @@ interface ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null,
-    horodatage: Date,
-  ): Promise<boolean>
+    motif: Motif | null,          // objet valeur du domaine (src/domain/Motif.ts)
+  ): Promise<boolean>             // decided_at = now() SQL, horloge unique
 }
 
 // Objets valeur du domaine (src/domain/) : constructeur privé, aucune

@@ -20,18 +20,25 @@ pending ──approve──▶ approved
 ```
 
 Aucune transition ne part de `approved` ou `rejected`. La règle est portée à
-trois endroits :
+trois endroits, chacun avec un rôle distinct :
 
-1. `ExpenseNote.approve()` / `reject()` lèvent une erreur si la note n'est
-   plus `pending` (`canBeDecided()`).
-2. Les routes `POST …/[id]/approve|reject` (manager et RH) renvoient `409
-   Already decided` si `status !== 'pending'` avant l'`UPDATE`.
-3. La contrainte `CHECK (status IN ('pending', 'approved', 'rejected'))` de
-   la migration borne les valeurs possibles (pas les transitions).
+1. **La règle métier** : `ExpenseNote.approve()` / `reject()` lèvent
+   `DejaTranchee('Already decided')` si la note n'est plus `pending`
+   (`canBeDecided()`). Le cas d'usage unique `TrancherNote` les appelle sur
+   la note lue, après l'autorisation et la validation du motif : une note
+   déjà tranchée donne `409` sans aucune écriture.
+2. **La garde de concurrence** : `trancherSiEnAttente` écrit par une seule
+   instruction `UPDATE … WHERE status = 'pending'`. Entre la lecture et
+   l'écriture, une autre décision peut gagner : zéro ligne affectée donne
+   aussi `409 Already decided` (I6). Cette garde ne doit jamais être retirée
+   au motif que l'entité vérifie déjà le statut — l'entité travaille sur une
+   lecture qui peut être périmée.
+3. **La borne des valeurs** : la contrainte
+   `CHECK (status IN ('pending', 'approved', 'rejected'))` de la migration
+   (pas les transitions).
 
-Les routes n'utilisent pas encore la classe `ExpenseNote` : elles relisent
-le statut et écrivent en SQL. Toute nouvelle route de décision doit
-reproduire le contrôle `pending` → 409, ou passer par la classe.
+Toute nouvelle décision passe par `TrancherNote` (amendement du
+2026-10-26, lot 2 : la classe est désormais utilisée par les routes).
 
 ## Reasons
 
@@ -44,7 +51,7 @@ reproduire le contrôle `pending` → 409, ou passer par la classe.
 
 ```
 make test                                   # tests de ExpenseNote
-rg "status = '(approved|rejected)'" src/    # chaque UPDATE doit suivre un contrôle 'pending'
+rg "SET status" src/                        # seule trancherSiEnAttente écrit le statut, sous WHERE status = 'pending'
 ```
 
 ## Firing condition
@@ -58,8 +65,10 @@ Dans une copie jetable, le drill retire la garde de `approve()` puis de
 mutation qui doit passer. Le drill échoue aussi si la garde n'est plus
 trouvée là où il l'attend (mutation non appliquée).
 
-Les gardes des routes (409) ne sont pas encore couvertes par un test : il
-faudrait des tests d'intégration avec PostgreSQL (voir `docs/backlog.md`).
+La garde de l'entité est aussi couverte au niveau du cas d'usage
+(`tests/unit/application/trancher-note.test.ts` : note lue déjà tranchée →
+409 sans écriture). La garde de concurrence reste sans drill rejouable
+(`docs/backlog.md` #002).
 
 ## Retirement
 

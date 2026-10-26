@@ -2,6 +2,7 @@ import type { Acteur } from '@/domain/Acteur'
 import type { DateDepense } from '@/domain/DateDepense'
 import type { Description } from '@/domain/Description'
 import type { Montant } from '@/domain/Montant'
+import type { Motif } from '@/domain/Motif'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
@@ -51,7 +52,9 @@ export interface ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null
+    // Objet valeur du domaine (ADR-DOMAIN-002) : obligatoire au rejet,
+    // garanti par Motif.pour avant l'appel.
+    motif: Motif | null
   ): Promise<boolean>
 
   // Phase 4 : notes en attente visibles par l'acteur (I8) — manager :
