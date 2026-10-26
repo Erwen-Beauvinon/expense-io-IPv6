@@ -27,8 +27,15 @@ export function getPool(): Pool {
     // exigent le compte d'administration — jamais en production.
     // Repli explicite (revue phase/8 §1) : sans APP_DATABASE_URL,
     // le serveur tourne superutilisateur et la RLS est contournée —
-    // signalé une fois dans les logs, jamais silencieux.
+    // signalé une fois dans les logs, jamais silencieux. En production,
+    // une variable oubliée ne doit pas désactiver l'isolation en
+    // silence (revue V2, point 2) : le démarrage échoue.
     if (!process.env.APP_DATABASE_URL) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          'APP_DATABASE_URL requis en production : sans lui, le serveur tournerait en superutilisateur et la RLS serait contournée'
+        )
+      }
       console.error(
         '[db] APP_DATABASE_URL absent : repli sur DATABASE_URL (RLS contournée, réservé à migrate/seed)'
       )
