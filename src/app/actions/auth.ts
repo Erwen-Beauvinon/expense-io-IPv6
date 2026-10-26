@@ -8,6 +8,7 @@ import { DonneesInvalides } from '@/domain/errors'
 import { getAnnuaire, getUnitOfWork } from '@/lib/container'
 import {
   MESSAGE_TROP_DE_TENTATIVES,
+  ipCliente,
   limiteurAuth,
 } from '@/lib/rate-limit'
 import { signIn, signOut } from '@/lib/auth'
@@ -19,16 +20,13 @@ export interface AuthFormState {
 // Clés de limitation (revue phase/8 §4) : seau par IP appelante ET seau
 // par compte visé — un réseau partagé ne se verrouille pas mutuellement
 // (comptes distincts) et forger l'en-tête IP ne contourne pas le seau
-// compte. Confiance proxy : le premier `x-forwarded-for` n'est fiable
-// que derrière un proxy de confiance qui l'écrase ; sinon tous les
-// clients sans en-tête partagent le seau `inconnue` (documenté, pas
-// silencieux). Seuls les échecs sont comptés.
+// compte. Extraction d'IP : voir `ipCliente` (revue V2, point 3 —
+// dernière entrée x-forwarded-for, uniquement derrière un proxy de
+// confiance déclaré). Login : seuls les échecs sont comptés ;
+// inscription : chaque tentative est comptée, succès compris.
 async function clesLimite(action: string, email: unknown): Promise<string[]> {
   const entetes = await headers()
-  const ip =
-    entetes.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    entetes.get('x-real-ip') ??
-    'inconnue'
+  const ip = ipCliente(entetes)
   const compte =
     typeof email === 'string' && email.includes('@')
       ? email.trim().toLowerCase()
@@ -55,6 +53,9 @@ export async function signup(
   if (quotaEpuise(cles).length > 0) {
     return { error: MESSAGE_TROP_DE_TENTATIVES }
   }
+  // Chaque tentative coûte (bcrypt, création d'entreprise possible) :
+  // comptée avant traitement, succès compris (revue V2, point 3).
+  for (const cle of cles) limiteurAuth.signalerTentative(cle)
 
   // Phase 7 : la Server Action ne fait que traduire le formulaire en
   // entrée du cas d'usage. Validation, règle du premier inscrit et
@@ -70,7 +71,7 @@ export async function signup(
     )
   } catch (error) {
     if (error instanceof DonneesInvalides) {
-      signalerEchec(cles)
+      // Déjà comptée comme tentative ci-dessus : pas de double compte.
       return { error: error.message }
     }
     throw error

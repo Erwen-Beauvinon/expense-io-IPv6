@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import {
   MESSAGE_TROP_DE_TENTATIVES,
   creerLimiteur,
+  ipCliente,
 } from '@/lib/rate-limit'
 
 const PROTECTED_PREFIXES = ['/expenses', '/manager', '/hr']
@@ -18,10 +19,7 @@ const limiteurCallback = creerLimiteur({
 })
 
 function limiterCallbackReponse(req: Request): NextResponse | null {
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    req.headers.get('x-real-ip') ??
-    'inconnue'
+  const ip = ipCliente(req.headers)
   if (!limiteurCallback.autorise(`auth-callback:ip:${ip}`)) {
     return NextResponse.json({ error: MESSAGE_TROP_DE_TENTATIVES }, { status: 429 })
   }

@@ -44,6 +44,16 @@ export function creerLimiteur(options: LimiteurOptions) {
       balayer(instant)
       return purger(cle, instant).length < maxEssais
     },
+    // Tentatives : à appeler quand chaque essai coûte (inscription :
+    // bcrypt + création d'entreprise), succès compris (revue V2,
+    // point 3) — sinon les créations réussies sont illimitées.
+    signalerTentative(cle: string): void {
+      const instant = maintenant()
+      balayer(instant)
+      const passes = purger(cle, instant)
+      passes.push(instant)
+      echecsParCle.set(cle, passes)
+    },
     // Échecs seuls (revue phase/8 §4) : un réseau partagé (campus) dont
     // les connexions réussissent n'épuise jamais le quota. À appeler
     // sur toute réponse d'échec (400, identifiants invalides).
@@ -62,6 +72,25 @@ export function creerLimiteur(options: LimiteurOptions) {
 }
 
 export type Limiteur = ReturnType<typeof creerLimiteur>
+
+// IP cliente pour les seaux de limitation (revue V2, point 3). Le
+// premier `x-forwarded-for` est forgeable par le client : on ne fait
+// confiance aux en-têtes de transfert que derrière un proxy de
+// confiance déclaré (TRUSTED_PROXY=true), et on prend alors la
+// DERNIÈRE entrée — celle ajoutée par le proxy le plus proche, pas
+// celle inventée par le client. Sans proxy de confiance, aucun
+// en-tête n'est fiable : seau partagé `inconnue` (fail-closed, le
+// seau par compte reste la protection principale).
+export function ipCliente(entetes: Headers): string {
+  if (process.env.TRUSTED_PROXY === 'true') {
+    const chaine = entetes.get('x-forwarded-for')
+    const derniere = chaine?.split(',').at(-1)?.trim()
+    if (derniere) return derniere
+    const reelle = entetes.get('x-real-ip')?.trim()
+    if (reelle) return reelle
+  }
+  return 'inconnue'
+}
 
 // 10 échecs par tranche de 10 minutes, pour login et signup. Assez
 // large pour un usage légitime (erreurs de frappe), assez étroit pour
