@@ -40,12 +40,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof credentials?.password === 'string' ? credentials.password : null
         if (!email || !password) return null
 
+        // Seule voie d'accès à password_hash (migration 0006) : le
+        // rôle applicatif n'a plus SELECT sur cette colonne.
         const result = await getPool().query<{
           id: string
           email: string
           password_hash: string
           role: 'employee' | 'manager' | 'hr_admin'
-        }>('SELECT id, email, password_hash, role FROM users WHERE email = $1', [email])
+        }>(
+          'SELECT id, email, password_hash, role FROM authentifier_par_email($1)',
+          [email]
+        )
         const user = result.rows[0]
         if (!user) return null
 
