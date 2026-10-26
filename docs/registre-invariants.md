@@ -262,10 +262,10 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **État implémenté (V2)** : tenu. RH de la même entreprise pour les
   auteurs sans manager, les notes de RH (autres RH) et les équipes des
   managers racines ; égalité d'entreprise dans les policies (migrations
-  `0003`, `0005`). Couvert par la même table de vérité que I7. La file
-  RH (`figureDansLaFile`) reste restreinte aux auteurs sans manager et
-  aux RH : le pouvoir sur les équipes des managers racines n'est
-  accessible que par l'API (lecture A, lot 3).
+  `0003`, `0005`). Couvert par la même table de vérité que I7. Depuis la
+  lecture A (ADR-ARCH-002 amendé le 2026-10-26), la file RH liste toutes
+  ces notes : elle est exactement l'ensemble des notes dont le RH est
+  valideur.
 - **Tests** : I — RH de l'entreprise B ne voit ni ne tranche la note
   d'un manager racine de l'entreprise A, **en contournant
   l'applicatif** (requête directe sous contexte RLS) ; employé sans

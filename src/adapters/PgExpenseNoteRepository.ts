@@ -60,7 +60,7 @@ function versNoteAvecAuteur(ligne: LigneNote): NoteAvecAuteur {
 // Prédicat unique « l'acteur est valideur courant de la note `en` »
 // (tableau ADR-ARCH-002 : direct, N+1, RH des lignes 2-3), toujours dans
 // l'entreprise de l'acteur et jamais sur sa propre note (I7). Partagé
-// par la décision et la file manager ; translitération en SQL de
+// par la décision et la file de tous les décideurs ; translitération en SQL de
 // calculerValideurs (domaine), et des policies RLS de la migration 0005.
 // Les trois versions sont confrontées à la même table de vérité par
 // tests/integration/concordance-valideurs.test.ts. Paramètres : les
@@ -178,29 +178,13 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
   }
 
   async listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]> {
-    // Phase 4 (revues) : files déduites du rattachement courant
-    // (tableau ADR-ARCH-002), tri croissant comme les anciennes
-    // requêtes. Manager : managés directs ET indirects (N+1, même
-    // droit). RH : file de routage — auteurs sans manager (managers
-    // racines, employés non rattachés, notes de RH), hors ses propres
-    // notes (I7). Le pouvoir complet (ex. RH valideur d'une équipe
-    // racine, tableau ligne 2) reste accessible via l'API.
+    // Files déduites du rattachement courant (tableau ADR-ARCH-002), tri
+    // croissant comme les anciennes requêtes. Lecture A (2026-10-26) : la
+    // file de chaque décideur — manager ou RH — est exactement l'ensemble
+    // des notes en attente dont il est valideur (figureDansLaFile côté
+    // domaine), avec le même prédicat que la décision. Un RH y voit donc
+    // aussi les équipes des managers racines, dont il est N+1.
     return withUserScope(acteur.id, async (client) => {
-      if (acteur.role === 'hr_admin') {
-        // File RH restreinte (figureDansLaFile) : auteurs sans manager et
-        // notes de RH, jamais les siennes.
-        const result = await client.query<LigneNote>(
-          `${SELECT_AVEC_AUTEUR} WHERE u.company_id = $1 AND en.status = 'pending'
-           AND en.user_id <> $2
-           AND (u.manager_id IS NULL OR u.role = 'hr_admin')
-           ORDER BY en.created_at ASC`,
-          [acteur.companyId, acteur.id]
-        )
-        return result.rows.map(versNoteAvecAuteur)
-      }
-      // Manager : même prédicat que la décision — la file est exactement
-      // l'ensemble des notes en attente dont il est valideur (direct ou
-      // N+1), figureDansLaFile côté domaine.
       const result = await client.query<LigneNote>(
         `${SELECT_AVEC_AUTEUR} WHERE u.company_id = $1 AND en.status = 'pending'
          AND ${predicatValideur('$2', '$1')}
@@ -210,6 +194,7 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
       return result.rows.map(versNoteAvecAuteur)
     })
   }
+
 
   async reserverSequence(): Promise<number> {
     // Phase 5 (revue §7) : numéro unique pour la clé receipts/{seq}.

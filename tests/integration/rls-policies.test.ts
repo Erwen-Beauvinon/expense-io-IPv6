@@ -249,8 +249,7 @@ suite('policies valideurs sur deux entreprises (ADR-ARCH-002)', () => {
     expect(vues).toContain(ids.nOrphelin)
     expect(vues).toContain(ids.nHrA)
     // Ligne 2 du tableau ADR-ARCH-002 : employé sous manager racine —
-    // le RH est valideur (pouvoir complet via l'API, même si la file
-    // de routage C09 ne liste que les sans-manager).
+    // le RH est valideur, et la file C09 le liste (lecture A).
     expect(vues).toContain(ids.nDirect)
     // Ligne 1 : équipe managée non racine — hors portée du RH.
     expect(vues).not.toContain(ids.nN1)

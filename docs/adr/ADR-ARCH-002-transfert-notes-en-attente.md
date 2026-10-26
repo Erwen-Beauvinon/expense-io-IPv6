@@ -109,7 +109,9 @@ jusqu'à son expiration, par toute personne qui détient le lien.
 - **Changement de comportement visible** : les notes des employés sans
   manager, aujourd'hui vues par personne, apparaissent dans la liste RH
   (`GET /api/hr/expense-notes`), et les N+1 voient les notes de leurs
-  équipes indirectes dans leur liste manager. La forme des réponses ne
+  équipes indirectes dans leur liste manager. Depuis l'amendement du
+  2026-10-26 (lecture A, ci-dessous), la liste RH contient aussi les
+  équipes des managers racines. La forme des réponses ne
   change pas, leur contenu si. Les E2E qui comptent les notes listées
   sont à revoir avec le pilote 3.
 - **Décision en vol** : si l'ancien manager tranche au moment du
@@ -165,6 +167,37 @@ jusqu'à son expiration, par toute personne qui détient le lien.
 - Test d'intégration : note déjà décidée avant rattachement ; son
   statut reste inchangé après transfert.
 - Contrôle de non-régression contrat client (tests golden C05–C07).
+
+## Amendement du 2026-10-26 — lecture A : la file RH liste tout ce que le RH peut trancher
+
+Décision du pilote 4a (architecture). Jusqu'ici, la file RH
+(`GET /api/hr/expense-notes`, C09) ne listait que les auteurs sans manager
+et les notes de RH : un RH valideur des équipes des managers racines
+(ligne 2 du tableau) ne pouvait les trancher que par l'API. Si un manager
+racine devenait indisponible, les notes de son équipe restaient bloquées
+en pratique.
+
+Désormais, **la file de chaque décideur — manager ou RH — est exactement
+l'ensemble des notes en attente dont il est valideur** (`figureDansLaFile`,
+même prédicat SQL que la décision). Le pouvoir de décision ne change pas :
+seul l'affichage le rejoint.
+
+- **Visible** : le contenu de C09 change (forme inchangée). Dérogation
+  consignée au contrat client, §10.
+- **Non visible** : les lignes 1 et 3 du tableau sont inchangées. Une
+  équipe dont le manager a un N+1 manager n'apparaît pas chez les RH.
+- **Course** : le manager racine et les RH voient la même note ; le
+  premier qui tranche l'emporte (I6), l'autre reçoit `409 Already
+  decided`. Aucun signal n'informe le manager qu'un RH a tranché à sa
+  place (la notification ne vise que l'auteur).
+- **Titre de la section** de la page `/hr` : « Notes des managers racine
+  en attente » est conservé (§6 du contrat : aucun texte modifié sans
+  dérogation). Il devient imprécis ; son changement est une décision
+  ouverte.
+- **Vérification** : `tests/support/table-valideurs.ts` (files
+  attendues), `tests/integration/concordance-valideurs.test.ts`,
+  `tests/e2e/hr.spec.ts` (« tranche les notes des managers racine et de
+  leurs équipes »).
 
 ## Retirement
 

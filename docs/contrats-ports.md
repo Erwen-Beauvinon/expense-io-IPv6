@@ -90,10 +90,10 @@ interface ExpenseNoteRepository {
 
   listerParAuteur(acteur: Acteur, auteurId: string, tri: OrdreTri): Promise<NoteAvecAuteur[]>
 
-  // Notes pending du périmètre de décision courant (ADR-ARCH-002) :
-  // manager — notes de ses managés directs ET indirects (N+1) ;
-  // RH — notes des auteurs sans manager (managers racines, employés
-  // non rattachés, notes de RH), hors ses propres notes (I7).
+  // Notes pending dont l'acteur est valideur (ADR-ARCH-002, lecture A) :
+  // manager — managés directs ET indirects (N+1) ; RH — auteurs sans
+  // manager, notes des autres RH et équipes des managers racines ;
+  // jamais ses propres notes (I7).
   // Tri `created_at` croissant, comme les anciennes requêtes.
   listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]>
 
@@ -138,15 +138,15 @@ Garanties attendues de l'implémentation :
   atomiquement (ADR-ARCH-002 §3) ;
 - le prédicat « l'acteur est valideur » n'existe qu'**une fois** en SQL
   (`predicatValideur`, exporté par `PgExpenseNoteRepository`), partagé
-  par `trancherSiEnAttente` et la file manager ; sa concordance avec
+  par `trancherSiEnAttente` et les files de tous les décideurs ; sa
+  concordance avec
   `calculerValideurs` et les policies RLS est prouvée par
   `tests/integration/concordance-valideurs.test.ts` ;
 - `listerEnAttentePour` se déduit du rattachement **courant**
-  (ADR-ARCH-002) : aucun valideur stocké n'est lu. La liste RH est
-  une file de routage (auteurs sans manager), pas l'ensemble du
-  pouvoir de décision : un RH valideur d'une équipe racine (tableau
-  ADR-ARCH-002 ligne 2) tranche via l'API, même si la note n'est
-  pas dans sa file — plein pouvoir, file restreinte (e2e RH) ;
+  (ADR-ARCH-002) : aucun valideur stocké n'est lu. Pour un manager
+  comme pour un RH, la file est exactement l'ensemble des notes en
+  attente dont il est valideur (lecture A, amendement ADR-ARCH-002 du
+  2026-10-26) : un RH y voit aussi les équipes des managers racines ;
 - `reserverSequence` lit `pg_get_serial_sequence('expense_notes',
   'receipt_seq')` (nom auto-généré jamais codé en dur).
 

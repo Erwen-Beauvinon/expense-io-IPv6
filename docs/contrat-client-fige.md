@@ -179,3 +179,26 @@ cas du rejet :
 - Les tests golden de C07/C11 sont mis à jour dans la même phase :
   rejet nominal **avec** motif, plus un cas d'erreur nouveau
   « rejet sans motif → 400 ».
+
+## 10. Dérogation acceptée — file RH complète (lecture A, 2026-10-26)
+
+Source : amendement d'ADR-ARCH-002 du 2026-10-26 (pilote 4a). Cette
+dérogation prime sur le §1 (« mêmes réponses de succès ») pour le seul
+contenu de C09 :
+
+- `GET /api/hr/expense-notes` (C09) liste toutes les notes en attente
+  dont le RH est valideur : en plus des auteurs sans manager et des notes
+  des autres RH, **les notes des équipes des managers racines**. La forme
+  de la réponse (tableau de notes, §4) et le tri (création croissante)
+  ne changent pas.
+- Le pouvoir de décision ne change pas : ces notes étaient déjà
+  tranchables par le RH via C11 ; l'interface les affiche désormais.
+- Aucun texte de page ne change : le titre « Notes des managers racine
+  en attente » est conservé (§6). Le modifier exigerait un nouvel
+  amendement.
+- Golden : `tests/contract/golden.reference.json` est **inchangé**. Dans
+  le scénario de capture, le manager rejette la note de l'employé de
+  démonstration (C07) avant que le RH ne liste ses notes (C09) : la file
+  RH n'y contient que la note du manager racine, avant comme après.
+- E2E : `tests/e2e/hr.spec.ts` est mis à jour dans la même PR (le RH voit
+  et tranche la note d'un employé du manager racine).
