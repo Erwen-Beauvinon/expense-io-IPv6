@@ -136,6 +136,11 @@ Garanties attendues de l'implémentation :
   `SELECT` préalable décisionnel. L'autorisation reste vérifiée avant
   par le cas d'usage (404 propre), l'écriture la réévalue
   atomiquement (ADR-ARCH-002 §3) ;
+- le prédicat « l'acteur est valideur » n'existe qu'**une fois** en SQL
+  (`predicatValideur`, exporté par `PgExpenseNoteRepository`), partagé
+  par `trancherSiEnAttente` et la file manager ; sa concordance avec
+  `calculerValideurs` et les policies RLS est prouvée par
+  `tests/integration/concordance-valideurs.test.ts` ;
 - `listerEnAttentePour` se déduit du rattachement **courant**
   (ADR-ARCH-002) : aucun valideur stocké n'est lu. La liste RH est
   une file de routage (auteurs sans manager), pas l'ensemble du

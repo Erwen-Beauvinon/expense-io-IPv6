@@ -77,6 +77,40 @@ export function calculerValideurs(
   return [...valideurs]
 }
 
+// Les RH sont-ils candidats valideurs ? Mêmes cas que calculerValideurs,
+// exposés pour que l'appelant ne lise la liste des RH qu'au besoin
+// (revues phase/3) sans réécrire la règle : auteur RH, sans manager,
+// manager direct inconnu ou non manager, ou manager direct racine.
+export function besoinDesRh(
+  auteur: AuteurNote,
+  direct: NoeudHierarchique | null
+): boolean {
+  return (
+    auteur.role === 'hr_admin' ||
+    !auteur.managerId ||
+    !direct ||
+    direct.role !== 'manager' ||
+    !direct.managerId
+  )
+}
+
+// File « à trancher » d'un acteur : les notes en attente dont il est
+// valideur. Exception RH (ADR-ARCH-002, « file restreinte ») : la file
+// RH ne liste que les auteurs sans manager et les RH ; le pouvoir de
+// décision sur les équipes des managers racines reste accessible par
+// l'API. Définition de référence : la requête SQL de
+// `listerEnAttentePour` doit dire la même chose (test de concordance,
+// tests/integration/concordance-valideurs.test.ts).
+export function figureDansLaFile(
+  acteur: Acteur,
+  auteur: AuteurNote,
+  valideurs: string[]
+): boolean {
+  if (!valideurs.includes(acteur.id)) return false
+  if (acteur.role !== 'hr_admin') return true
+  return auteur.managerId === null || auteur.role === 'hr_admin'
+}
+
 export function peutConsulter(
   acteur: Acteur,
   note: NoteAvecAuteur,

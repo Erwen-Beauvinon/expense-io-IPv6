@@ -224,13 +224,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   centralisée, non testée ; les policies RLS ne connaissaient pas le
   N+1 (alignées depuis par la migration `0005`, ADR-DATA-002
   `accepted`).
-- **État implémenté (V2)** : tenu. `calculerValideurs`
-  (`src/domain/PolitiqueAcces.ts`) : manager direct + N+1, auteur
-  toujours exclu. Règle réévaluée dans le `WHERE` de
-  `trancherSiEnAttente` et dans les policies RLS
-  `expense_notes_valideurs_*` (migration `0005`). Tests :
-  `tests/unit/domain/politique-acces.test.ts`,
-  `tests/integration/rls-policies.test.ts`.
+- **État implémenté (V2)** : tenu. Référence : `calculerValideurs`
+  (`src/domain/PolitiqueAcces.ts`) — manager direct + N+1, auteur
+  toujours exclu ; `besoinDesRh` et `figureDansLaFile` y vivent aussi.
+  Copies imposées : un seul prédicat SQL (`predicatValideur`, partagé
+  par la décision et la file manager) et les policies RLS de la
+  migration `0005`. Les trois versions sont confrontées à une table de
+  vérité unique (`tests/support/table-valideurs.ts`) : domaine par
+  `tests/unit/domain/table-valideurs.test.ts`, SQL et RLS par
+  `tests/integration/concordance-valideurs.test.ts`.
 - **Tests** : D — table de vérité de `valideursDe` (pluriel) ;
   I — le N+1 voit, consulte et tranche ; un manager d'une autre
   branche ou d'une autre entreprise est refusé ; auto-décision
@@ -256,11 +258,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   manager : la base seule ne tient pas l'invariant.
 - **État implémenté (V2)** : tenu. RH de la même entreprise pour les
   auteurs sans manager, les notes de RH (autres RH) et les équipes des
-  managers racines ; égalité d'entreprise ajoutée aux policies
-  (migrations `0003`, `0005`). La file RH (`listerEnAttentePour`) ne
-  liste encore que les auteurs sans manager et les RH : le pouvoir sur
-  les équipes des managers racines n'est accessible que par l'API
-  (lecture A, lot 3).
+  managers racines ; égalité d'entreprise dans les policies (migrations
+  `0003`, `0005`). Couvert par la même table de vérité que I7. La file
+  RH (`figureDansLaFile`) reste restreinte aux auteurs sans manager et
+  aux RH : le pouvoir sur les équipes des managers racines n'est
+  accessible que par l'API (lecture A, lot 3).
 - **Tests** : I — RH de l'entreprise B ne voit ni ne tranche la note
   d'un manager racine de l'entreprise A, **en contournant
   l'applicatif** (requête directe sous contexte RLS) ; employé sans
