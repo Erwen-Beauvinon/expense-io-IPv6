@@ -46,3 +46,7 @@ next-env.d.ts
 /playwright-report
 /blob-report
 /playwright/.cache
+
+# Golden (capture locale / CI)
+/golden.live.json
+/golden-server.log

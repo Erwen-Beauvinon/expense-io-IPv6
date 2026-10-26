@@ -9,6 +9,14 @@ const USERS = {
   hr: { email: 'hr@expense.io', password: 'hr1234' },
 }
 
+// Date fixe de la note soumise par la capture (C02) : comparée telle
+// quelle. Les notes du seed sont datées CURRENT_DATE, donc du jour de
+// la capture : seule leur date est normalisée, et seulement si elle
+// garde le format chaîne YYYY-MM-DD (AGENTS.md) — une régression vers un
+// horodatage ISO reste un écart.
+const DATE_SOUMISE = '2026-10-01'
+const FORMAT_DATE = /^\d{4}-\d{2}-\d{2}$/
+
 function normalize(value) {
   if (Array.isArray(value)) return value.map(normalize)
   if (value && typeof value === 'object') {
@@ -20,6 +28,13 @@ function normalize(value) {
     if (typeof out.receiptKey === 'string') out.receiptKey = '<receiptKey>'
     if (typeof out.url === 'string') out.url = '<signedUrl>'
     if (typeof out.createdAt === 'string') out.createdAt = '<isoDate>'
+    if (
+      typeof out.expenseDate === 'string' &&
+      FORMAT_DATE.test(out.expenseDate) &&
+      out.expenseDate !== DATE_SOUMISE
+    ) {
+      out.expenseDate = '<seedDate>'
+    }
     // Les colonnes decided_by/at (migration 0002) restent internes :
     // absentes du JSON, rien à normaliser.
     return out
@@ -148,7 +163,7 @@ for (const role of Object.keys(USERS)) {
   const api = await login(USERS.employee)
   const f = new FormData()
   f.set('amount', '12.5')
-  f.set('expenseDate', '2026-10-01')
+  f.set('expenseDate', DATE_SOUMISE)
   f.set('description', 'Taxi golden')
   f.set('receipt', new File([png1x1], 'r.png', { type: 'image/png' }))
   // La clé du reçu est normalisée par normalize() (<receiptKey>) :
@@ -158,7 +173,7 @@ for (const role of Object.keys(USERS)) {
   // sans écriture — le seed reste identique pour les captures suivantes.
   const fInvalide = new FormData()
   fInvalide.set('amount', '12abc')
-  fInvalide.set('expenseDate', '2026-10-01')
+  fInvalide.set('expenseDate', DATE_SOUMISE)
   fInvalide.set('description', 'Taxi golden')
   fInvalide.set('receipt', new File([png1x1], 'r.png', { type: 'image/png' }))
   out.employee.C02_invalid = await api('/api/expense-notes', { method: 'POST', body: fInvalide })
