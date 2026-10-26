@@ -1,3 +1,4 @@
+import type { Transaction } from '@/domain/Transaction'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 
 // Port AnnuaireOrganisation, lecture (docs/contrats-ports.md §4).
@@ -6,9 +7,34 @@ import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 export interface AnnuaireOrganisation {
   trouverUtilisateur(
     companyId: string,
-    userId: string
+    userId: string,
+    tx?: Transaction
   ): Promise<UtilisateurAnnuaire | null>
 
   // Tous les hr_admin de l'entreprise (routage RH : I8, ADR-ARCH-002).
   listerRh(companyId: string): Promise<UtilisateurAnnuaire[]>
+
+  // Phase 6 : collaborateurs gérés (employés + managers) de
+  // l'entreprise, pour la consultation RH (aucune jointure avec le
+  // domaine Notes). Les comptes RH sont exclus, comme l'ancienne
+  // route (parité C08).
+  listerCollaborateurs(companyId: string): Promise<UtilisateurAnnuaire[]>
+
+  // Phase 6 (revue §3) : rattachement d'un collaborateur à un
+  // manager (I11–I13), dans la transaction du cas d'usage. managerId
+  // null détache. Le type est string | null : la validation a déjà eu
+  // lieu dans RattacherAuManager, l'inconnu ne traverse pas le port.
+  // L'éligibilité est déjà vérifiée par RattacherAuManager.
+  rattacher(
+    tx: Transaction,
+    companyId: string,
+    userId: string,
+    managerId: string | null
+  ): Promise<void>
+
+  // Verrou de sérialisation des rattachements (revue phase/6 §1, I12) :
+  // verrou consultatif transactionnel par entreprise — deux
+  // rattachements concurrents ne s'entrelacent jamais, la détection de
+  // cycle par lectures reste donc exacte.
+  verrouillerRattachements(tx: Transaction, companyId: string): Promise<void>
 }

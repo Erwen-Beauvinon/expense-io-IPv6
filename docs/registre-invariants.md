@@ -289,7 +289,10 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Aujourd'hui** : violé. Seul l'auto-rattachement direct est bloqué
   (`managerId === id` → 409) ; aucun contrôle transitif.
 - **Garantie cible** : domaine Organisation, parcours de la chaîne
-  avant écriture, dans la transaction du cas d'usage.
+  avant écriture, dans la transaction du cas d'usage. Tranché en
+  revue phase/6 : verrou consultatif transactionnel par entreprise
+  (`verrouillerRattachements`) + lectures dans le `executer` — deux
+  rattachements concurrents ne s'entrelacent jamais, sans CTE.
 - **Tests** : D/A — cycles de longueur 2 et 3 refusés ; chaîne légitime
   profonde acceptée.
 - **Question ouverte** : profondeur maximale de hiérarchie, s'il en
