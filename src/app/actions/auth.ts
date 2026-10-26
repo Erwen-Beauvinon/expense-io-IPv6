@@ -2,15 +2,47 @@
 
 import bcrypt from 'bcryptjs'
 import { AuthError } from 'next-auth'
-import { getPool } from '@/lib/db'
+import { headers } from 'next/headers'
+import { inscrire } from '@/application/Inscrire'
+import { DonneesInvalides } from '@/domain/errors'
+import { getAnnuaire, getUnitOfWork } from '@/lib/container'
+import {
+  MESSAGE_TROP_DE_TENTATIVES,
+  limiteurAuth,
+} from '@/lib/rate-limit'
 import { signIn, signOut } from '@/lib/auth'
 
 export interface AuthFormState {
   error?: string
 }
 
-const MIN_PASSWORD_LENGTH = 8
-const EMAIL_PATTERN = /^[^\s@]+@([^\s@]+\.[^\s@]+)$/
+// Clés de limitation (revue phase/8 §4) : seau par IP appelante ET seau
+// par compte visé — un réseau partagé ne se verrouille pas mutuellement
+// (comptes distincts) et forger l'en-tête IP ne contourne pas le seau
+// compte. Confiance proxy : le premier `x-forwarded-for` n'est fiable
+// que derrière un proxy de confiance qui l'écrase ; sinon tous les
+// clients sans en-tête partagent le seau `inconnue` (documenté, pas
+// silencieux). Seuls les échecs sont comptés.
+async function clesLimite(action: string, email: unknown): Promise<string[]> {
+  const entetes = await headers()
+  const ip =
+    entetes.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    entetes.get('x-real-ip') ??
+    'inconnue'
+  const compte =
+    typeof email === 'string' && email.includes('@')
+      ? email.trim().toLowerCase()
+      : 'sans-compte'
+  return [`${action}:ip:${ip}`, `${action}:compte:${compte}`]
+}
+
+function quotaEpuise(cles: string[]): string[] {
+  return cles.filter((cle) => !limiteurAuth.autorise(cle))
+}
+
+function signalerEchec(cles: string[]): void {
+  for (const cle of cles) limiteurAuth.signalerEchec(cle)
+}
 
 export async function signup(
   _prevState: AuthFormState,
@@ -19,54 +51,30 @@ export async function signup(
   const name = formData.get('name')
   const email = formData.get('email')
   const password = formData.get('password')
-
-  const emailMatch = typeof email === 'string' ? EMAIL_PATTERN.exec(email) : null
-  if (
-    typeof name !== 'string' ||
-    name.trim().length === 0 ||
-    !emailMatch ||
-    typeof password !== 'string' ||
-    password.length < MIN_PASSWORD_LENGTH
-  ) {
-    return {
-      error: `Nom requis, email invalide, ou mot de passe trop court (${MIN_PASSWORD_LENGTH} caractères minimum).`,
-    }
+  const cles = await clesLimite('signup', email)
+  if (quotaEpuise(cles).length > 0) {
+    return { error: MESSAGE_TROP_DE_TENTATIVES }
   }
 
-  const existing = await getPool().query('SELECT id FROM users WHERE email = $1', [email])
-  if ((existing.rowCount ?? 0) > 0) {
-    return { error: 'Un compte existe déjà avec cet email.' }
-  }
-
-  const domain = emailMatch[1].toLowerCase()
-  const companyName = domain.split('.')[0]
-
-  const insertedCompany = await getPool().query<{ id: string }>(
-    `INSERT INTO companies (name, email_domain) VALUES ($1, $2)
-     ON CONFLICT (email_domain) DO NOTHING
-     RETURNING id`,
-    [companyName, domain]
-  )
-
-  let companyId: string
-  let role: 'employee' | 'hr_admin'
-  if (insertedCompany.rows[0]) {
-    companyId = insertedCompany.rows[0].id
-    role = 'hr_admin'
-  } else {
-    const existingCompany = await getPool().query<{ id: string }>(
-      'SELECT id FROM companies WHERE email_domain = $1',
-      [domain]
+  // Phase 7 : la Server Action ne fait que traduire le formulaire en
+  // entrée du cas d'usage. Validation, règle du premier inscrit et
+  // transaction vivent dans Inscrire ; messages publics inchangés.
+  try {
+    await inscrire(
+      { nom: name, email, motDePasse: password },
+      {
+        annuaire: getAnnuaire(),
+        unitOfWork: getUnitOfWork(),
+        hacherMotDePasse: (clair: string) => bcrypt.hash(clair, 12),
+      }
     )
-    companyId = existingCompany.rows[0].id
-    role = 'employee'
+  } catch (error) {
+    if (error instanceof DonneesInvalides) {
+      signalerEchec(cles)
+      return { error: error.message }
+    }
+    throw error
   }
-
-  const passwordHash = await bcrypt.hash(password, 12)
-  await getPool().query(
-    'INSERT INTO users (name, email, password_hash, company_id, role) VALUES ($1, $2, $3, $4, $5)',
-    [name.trim(), email, passwordHash, companyId, role]
-  )
 
   try {
     await signIn('credentials', { email, password, redirectTo: '/expenses' })
@@ -85,8 +93,13 @@ export async function login(
 ): Promise<AuthFormState> {
   const email = formData.get('email')
   const password = formData.get('password')
+  const cles = await clesLimite('login', email)
+  if (quotaEpuise(cles).length > 0) {
+    return { error: MESSAGE_TROP_DE_TENTATIVES }
+  }
 
   if (typeof email !== 'string' || typeof password !== 'string') {
+    signalerEchec(cles)
     return { error: 'Champs invalides.' }
   }
 
@@ -94,6 +107,7 @@ export async function login(
     await signIn('credentials', { email, password, redirectTo: '/expenses' })
   } catch (error) {
     if (error instanceof AuthError) {
+      signalerEchec(cles)
       return { error: 'Email ou mot de passe incorrect.' }
     }
     throw error

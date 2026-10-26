@@ -36,6 +36,8 @@ test.describe('RH', () => {
     await noteRow(page, 'Salon pro').getByRole('button', { name: 'Approuver' }).click()
     await expect(noteRow(page, 'Salon pro')).toHaveCount(0)
     await noteRow(page, 'Dîner perso').getByRole('button', { name: 'Rejeter' }).click()
+    await noteRow(page, 'Dîner perso').getByLabel(/Motif du rejet/).fill('Note hors périmètre pro')
+    await noteRow(page, 'Dîner perso').getByRole('button', { name: 'Confirmer le rejet' }).click()
     await expect(noteRow(page, 'Dîner perso')).toHaveCount(0)
 
     expect(await noteStatus(approvedId)).toBe('approved')

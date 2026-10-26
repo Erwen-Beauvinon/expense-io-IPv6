@@ -1,6 +1,7 @@
+import { contenantHorsGabarit, suggererChamps } from '@/application/SuggererChamps'
 import { auth } from '@/lib/auth'
+import { getAnalyseur } from '@/lib/container'
 import { respondError } from '@/lib/errors'
-import { suggestFields } from '@/lib/ocr'
 
 export async function POST(request: Request) {
   try {
@@ -15,8 +16,18 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Champs invalides' }, { status: 400 })
     }
 
+    // Phase 5 : les bornes (types, taille) vivent dans le cas d'usage.
+    // Les réponses restent celles du contrat gelé C03.
+    // Revue phase/5 §1 (F7) : gabarit vérifié sur les métadonnées AVANT
+    // de charger les octets — un hors-gabarit rend {} sans lecture.
+    if (contenantHorsGabarit({ mimeType: receipt.type, size: receipt.size })) {
+      return Response.json({})
+    }
     const buffer = Buffer.from(await receipt.arrayBuffer())
-    const suggestion = await suggestFields({ data: buffer, mimeType: receipt.type })
+    const suggestion = await suggererChamps(
+      { data: buffer, mimeType: receipt.type, size: receipt.size },
+      { analyseur: getAnalyseur() }
+    )
     return Response.json(suggestion)
   } catch (error) {
     return respondError(error)

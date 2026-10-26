@@ -151,20 +151,20 @@ domaines). Porte I11–I13 et l'alimentation de `valideurDe` (I7, I8).
 
 ```ts
 interface AnnuaireOrganisation {
-  trouverUtilisateur(companyId: string, userId: string): Promise<UtilisateurAnnuaire | null>
+  trouverUtilisateur(
+    companyId: string,
+    userId: string,
+    tx?: Transaction,   // avec tx : participe à la transaction du cas d'usage (revue phase/6)
+  ): Promise<UtilisateurAnnuaire | null>
 
   // Pour les écrans RH ; filtré par entreprise, jamais global
   listerCollaborateurs(companyId: string): Promise<UtilisateurAnnuaire[]>
 
-  // Chaîne des identifiants managers au-dessus de l'utilisateur,
-  // lue et verrouillée en écriture (SELECT … FOR UPDATE, lignes
-  // triées) dans la transaction du cas d'usage — sert la détection
-  // de cycle I12 sans course (revues phase/6).
-  listerChaineManageriale(
-    tx: Transaction,
-    companyId: string,
-    userId: string,
-  ): Promise<string[]>
+  // Sérialise les rattachements d'une entreprise (revue phase/6 §1,
+  // I12) : verrou consultatif transactionnel — lectures de la chaîne
+  // et écriture partagent une seule transaction, la détection de cycle
+  // ne peut plus être faussée par un entrelacement A→B / B→A.
+  verrouillerRattachements(tx: Transaction, companyId: string): Promise<void>
 
   // I11–I13 déjà vérifiés par le cas d'usage avant cet appel
   rattacher(tx: Transaction, companyId: string, userId: string, managerId: string | null): Promise<void>
@@ -204,7 +204,11 @@ Garanties :
 - commit si le travail réussit, rollback sur toute exception, contexte
   `app.current_user_id` posé puis relâché avec la connexion ;
 - pas d'imbrication : un second `executer` dans un travail en cours
-  est une erreur de programmation, signalée comme telle ;
+  est une erreur de programmation, signalée comme telle
+  (`TransactionImbriquee`, détectée par chaîne async — revue phase/5) ;
+- COMMIT d'issue incertaine : si le COMMIT échoue après un travail
+  réussi, `EcritureIncertaine` est levée (revue phase/5) — l'appelant
+  ne compense jamais sur cette erreur (I4) ;
 - **S3 et notifications sont hors transaction** : aucun port externe
   n'est appelé « dans » la transaction pour un effet irréversible.
   L'atomicité note + reçu (I4) s'obtient par l'ordre d'orchestration
@@ -273,7 +277,11 @@ préparation de la feature IA sans toucher au métier).
 
 ```ts
 interface AnalyseurDeRecu {
-  analyser(entree: { data: Buffer; mimeType: string }): Promise<SuggestionRecu>
+  analyser(entree: {
+    data: Buffer
+    mimeType: string
+    signal?: AbortSignal   // annulation réelle (revue phase/5, F7)
+  }): Promise<SuggestionRecu>
 }
 
 interface SuggestionRecu {
@@ -292,8 +300,10 @@ Contrat :
   pas la différence ;
 - les **bornes** sont portées par le cas d'usage, pas par
   l'adaptateur : types image acceptés (png/jpeg/webp, pas le PDF),
-  taille ≤ 10 Mio alignée sur I3, durée maximale à fixer au ticket
-  (valeur de départ proposée : 15 s) ;
+  taille ≤ 10 Mio alignée sur I3, vérifiées sur les métadonnées avant
+  lecture des octets (revue phase/5, F7), délai 15 s avec annulation
+  réelle (signal honoré, worker terminé) et plafond de concurrence
+  côté adaptateur (saturation → `{}`) ;
 - extension future sans rupture : des champs optionnels (score de
   confiance, moteur utilisé) pourront enrichir `SuggestionRecu` côté
   serveur ; seuls `amount` et `expenseDate` traversent vers le client

@@ -37,6 +37,12 @@
         "status": "pending",
         "createdAt": "<isoDate>"
       }
+    },
+    "C02_invalid": {
+      "status": 400,
+      "body": {
+        "error": "Montant invalide"
+      }
     }
   },
   "manager": {
@@ -84,6 +90,12 @@
       "status": 200,
       "body": {
         "url": "<signedUrl>"
+      }
+    },
+    "C07_reject_sans_motif": {
+      "status": 400,
+      "body": {
+        "error": "Motif invalide"
       }
     },
     "C07_reject": {
@@ -161,6 +173,12 @@
       "status": 200,
       "body": {
         "url": "<signedUrl>"
+      }
+    },
+    "C11_reject_sans_motif": {
+      "status": 400,
+      "body": {
+        "error": "Motif invalide"
       }
     },
     "C11_reject": {
