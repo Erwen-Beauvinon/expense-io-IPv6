@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
     const { id } = await params
 
-    return servirJustificatif(session, id, {
+    return await servirJustificatif(session, id, {
       notes: getNotes(),
       annuaire: getAnnuaire(),
       stockage: getStockageRecus(),
