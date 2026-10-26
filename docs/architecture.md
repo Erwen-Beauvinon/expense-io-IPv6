@@ -13,15 +13,20 @@ src/app/                 Next.js App Router : pages, routes API, server actions
   api/expense-notes/       Notes de l'utilisateur courant (liste, création, URL du reçu, suggestion OCR)
   api/manager/…            Liste et décisions d'un manager (valideur direct ou N+1)
   api/hr/…                 Annuaire RH, rattachement manager, liste et décisions RH
-  api/_partage/            Morceaux communs aux routes (accès au justificatif)
+  api/_partage/            Morceaux communs aux routes : contrôle d'espace (codes 401/403 figés),
+                           accès au justificatif
   actions/auth.ts          Server actions signup / login / logout (limitées en débit)
 src/components/          Composants client ('use client') : console RH, panneau de validation
 src/application/         Cas d'usage : SoumettreNote, ConsulterMesNotes, SuggererChamps,
                          AccederAuJustificatif, ListerNotesATrancher, TrancherNote,
                          ConsulterAnnuaire, RattacherAuManager, Inscrire
-src/domain/              Cœur métier pur : ExpenseNote (machine à états), PolitiqueAcces
-                         (valideurs, consultation), OrdreTri, erreurs métier, types
-                         (Acteur, Role, NoteAvecAuteur, UtilisateurAnnuaire, NoteTranchee)
+src/domain/              Cœur métier pur, où vivent les règles :
+                           ExpenseNote (machine à états), Montant, DateDepense, Description,
+                           Justificatif (reçu et gabarit OCR), Motif (décision),
+                           PolitiqueAcces (valideurs, file, consultation, rôles décideurs),
+                           Hierarchie (rattachement, cycles), Inscription (champs, rôle),
+                           OrdreTri, erreurs métier, types (Acteur, Role, NoteAvecAuteur,
+                           UtilisateurAnnuaire, NoteTranchee)
 src/ports/               Interfaces : ExpenseNoteRepository, AnnuaireOrganisation, UnitOfWork
                          (et sa poignée Transaction), ReceiptStoragePort, AnalyseurDeRecu,
                          NotificationPort
@@ -29,13 +34,15 @@ src/adapters/            PostgreSQL (notes, annuaire, unité de travail), S3, Te
 src/lib/                 Infrastructure et interface : container (racine de composition),
                          db (pg, transactions, RLS), auth (Auth.js), actor (acteur serveur),
                          errors (traducteur d'erreurs), serialisation (JSON figé),
-                         storage (S3), ocr (Tesseract), rate-limit
-src/utils/               Formatage et validateurs purs
+                         storage (S3), ocr (Tesseract) et lectureTicket (texte OCR → montant,
+                         date), rate-limit
+src/utils/               Formatage pur (partagé client/serveur)
 src/proxy.ts             Redirige vers /login les pages protégées ; limite l'endpoint Auth.js direct
 migrations/              Schéma SQL, traçabilité des décisions, rôle applicatif, index, policies RLS
 scripts/                 seed.mjs, ensure-bucket.mjs (app) ; capture/check-golden, validate-adrs,
                          drills/ (vérification)
 tests/unit/              Vitest : domaine, cas d'usage (ports simulés), adaptateurs, lib, utils
+tests/support/           Table de vérité des valideurs, partagée par le domaine et l'intégration
 tests/integration/       Vitest sous PostgreSQL réel et rôle applicatif (RUN_INTEGRATION=1)
 tests/contract/          Golden du contrat client (C01–C11)
 tests/e2e/               Playwright : parcours de référence
@@ -77,11 +84,15 @@ components ──▶ utils, domain
    connecte avec le rôle `expense_app`, non-superutilisateur
    ([ADR-DATA-002](adr/ADR-DATA-002-role-applicatif-rls.md)).
 5. Les valideurs sont calculés depuis l'organigramme courant
-   ([ADR-ARCH-002](adr/ADR-ARCH-002-transfert-notes-en-attente.md)) ; une
-   décision est une écriture conditionnelle unique sur `status = 'pending'`
-   qui enregistre auteur, date et motif
-   ([ADR-DOMAIN-002](adr/ADR-DOMAIN-002-tracabilite-decisions.md)), puis
-   l'auteur est notifié.
+   ([ADR-ARCH-002](adr/ADR-ARCH-002-transfert-notes-en-attente.md)). Une
+   décision passe par l'entité `ExpenseNote` (règle), puis par une écriture
+   conditionnelle unique sur `status = 'pending'` (concurrence) qui
+   enregistre auteur, date et motif
+   ([ADR-DOMAIN-001](adr/ADR-DOMAIN-001-expense-note-lifecycle.md),
+   [ADR-DOMAIN-002](adr/ADR-DOMAIN-002-tracabilite-decisions.md)), puis
+   l'auteur est notifié. La règle des valideurs existe en TypeScript, en un
+   prédicat SQL et dans la RLS : les trois sont confrontés à la même table
+   de vérité.
 6. Le reçu est envoyé sur S3 avant la création de la note ; sa lecture passe
    par une URL pré-signée de 300 s, émise après `peutConsulter`.
 
@@ -92,6 +103,7 @@ components ──▶ utils, domain
 | Frontières de couches | `make lint` + `drill-boundaries-*` |
 | Garde de statut du domaine | `make test` + `drill-transition-guard` |
 | Domaine et cas d'usage | `make test` (ports simulés, sans Docker) |
+| Concordance des valideurs TS / SQL / RLS | `tests/unit/domain/table-valideurs.test.ts` + `tests/integration/concordance-valideurs.test.ts` |
 | Types | `make typecheck` |
 | Format des ADR | `make validate-adrs` |
 | RLS sous rôle applicatif, inscription | `tests/integration/` (Docker, étape CI `Integration`) |
