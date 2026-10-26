@@ -24,6 +24,13 @@ if (!domain) {
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
+// Mot de passe du rôle applicatif, posé hors migration (revue
+// phase/8 §3) : développement uniquement — la production utilise un
+// secret dédié. Idempotent et inoffensif si déjà posé.
+await pool.query(
+  `ALTER ROLE expense_app WITH LOGIN PASSWORD 'expense_app_dev_only'`
+)
+
 // Un PNG 1x1 valide (pas juste des octets arbitraires) : "voir le reçu"
 // affiche une vraie image dans le navigateur plutôt qu'un fichier corrompu.
 const RECEIPT_PNG = Buffer.from(

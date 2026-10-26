@@ -20,9 +20,23 @@ declare global {
 
 export function getPool(): Pool {
   if (!global.__pgPool) {
-    const connectionString = process.env.DATABASE_URL
+    // RLS effective (phase 8, ADR-DATA-002, revue §1) : le serveur
+    // applicatif se connecte avec le rôle non-superutilisateur
+    // `expense_app`, soumis aux policies. Le repli sur DATABASE_URL
+    // n'existe que pour les scripts outillés (migrate, seed) qui
+    // exigent le compte d'administration — jamais en production.
+    // Repli explicite (revue phase/8 §1) : sans APP_DATABASE_URL,
+    // le serveur tourne superutilisateur et la RLS est contournée —
+    // signalé une fois dans les logs, jamais silencieux.
+    if (!process.env.APP_DATABASE_URL) {
+      console.error(
+        '[db] APP_DATABASE_URL absent : repli sur DATABASE_URL (RLS contournée, réservé à migrate/seed)'
+      )
+    }
+    const connectionString =
+      process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL
     if (!connectionString) {
-      throw new Error('DATABASE_URL is not set')
+      throw new Error('APP_DATABASE_URL ou DATABASE_URL requis')
     }
     global.__pgPool = new Pool({ connectionString, max: 20 })
   }

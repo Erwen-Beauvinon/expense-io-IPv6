@@ -93,7 +93,7 @@ l'identique dans tout refactoring) :
 | Erreur interne | `500` avec message technique et `stack` dans le JSON | `500` avec `{ "error": "Erreur interne" }`, détail en logs serveur uniquement |
 | Entrées invalides (montant, date) | acceptées ou `500` | `400` avec message précis (`Montant invalide`, `Date invalide`, `Description invalide`, `Justificatif manquant`, `Type de fichier non autorisé pour le reçu`, `Fichier trop volumineux`) — le statut est gelé, les textes sont actés ici, affichés tels quels par le client |
 | Fichier OCR hors gabarit (type ou > 10 Mio) | accepté, processus bloqué | `200` avec `{}` (suggestion vide, comme un reçu illisible) |
-| Abus répétés (brute-force, débit) | aucun frein | `429` |
+| Abus répétés (brute-force, débit) | aucun frein | `429` sur les routes HTTP (middleware `POST /api/auth/*`, phase 8) ; les Server Actions `login`/`signup` renvoient le même message dans leur état `{ error }` (HTTP 200, pas de statut 429 possible) — seuls les échecs sont comptés, par IP et par compte |
 
 L'interface web ne déclenche aucun de ces cas en usage normal (elle
 n'envoie notamment jamais de paramètre `sort`). Aucun ne requiert donc de
