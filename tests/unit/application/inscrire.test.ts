@@ -8,6 +8,7 @@ import type {
 import type { UnitOfWork } from '@/ports/UnitOfWork'
 import {
   MESSAGE_CHAMPS_INSCRIPTION,
+  MESSAGE_DOMAINE_PUBLIC,
   MESSAGE_EMAIL_EXISTANT,
   inscrire,
 } from '@/application/Inscrire'
@@ -136,6 +137,15 @@ describe('inscrire (I14, I15)', () => {
     await expect(inscrire(INSCRIPTION, d)).rejects.toThrowError(
       new DonneesInvalides(MESSAGE_EMAIL_EXISTANT)
     )
+  })
+
+  it('refuse un domaine e-mail public, même en premier inscrit (revue V2, point 4)', async () => {
+    const d = deps()
+    await expect(
+      inscrire({ nom: 'Eve', email: 'eve@gmail.com', motDePasse: 's3cret!!' }, d)
+    ).rejects.toThrowError(new DonneesInvalides(MESSAGE_DOMAINE_PUBLIC))
+    expect(d.annuaire.creerEntreprise).not.toHaveBeenCalled()
+    expect(d.hacherMotDePasse).not.toHaveBeenCalled()
   })
 
   it('n’attribue jamais le rôle manager (I15)', async () => {
