@@ -94,7 +94,7 @@ jobs:
       APP_DATABASE_URL: postgres://expense_app:expense_app_dev_only@localhost:5433/expense_io
       # Secret de test pour le build/run E2E uniquement (jamais en
       # production) : exigé depuis la phase 0 (secret JWT hors du code).
-      AUTH_SECRET: ci-e2e-dummy-secret
+      AUTH_SECRET: ci-e2e-dummy-secret-with-32plus-chars
       S3_ENDPOINT: http://localhost:4567
       S3_REGION: us-east-1
       S3_ACCESS_KEY_ID: test
