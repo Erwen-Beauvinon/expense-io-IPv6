@@ -2,9 +2,9 @@
 
 ## Signaler une vulnérabilité
 
-**Aucun contact privé n'est encore défini.** Un mainteneur doit en désigner un
-avant que cette section puisse y renvoyer. D'ici là, ne pas ouvrir d'issue
-publique contenant une vulnérabilité, un identifiant ou un exploit.
+Signalement privé via GitHub : [ouvrir un avis de sécurité privé](https://github.com/Erwen-Beauvinon/expense-io-IPv6/security/advisories/new)
+(dépôt → Security → Advisories). Ne pas ouvrir d'issue publique contenant
+une vulnérabilité, un identifiant ou un exploit.
 
 ## Périmètre
 
@@ -31,3 +31,10 @@ l'absence de secret ou de vulnérabilité.
 d'exemple. Un identifiant exposé doit être révoqué ou changé ; supprimer le
 fichier ne le révoque pas. Les comptes de démonstration du seed ne sont
 destinés qu'au développement local.
+
+**Ancien secret JWT (historique de `main`) : considéré comme révoqué.**
+Une valeur par défaut a existé dans le code avant la phase 0 ; elle reste
+lisible dans l'historique Git. Elle n'est plus utilisée nulle part : le
+démarrage refuse toute valeur d'exemple ou de moins de 32 caractères, et
+les sessions signées avec elle ne sont pas acceptées. Tout déploiement
+doit générer son propre `AUTH_SECRET` (`make env`).

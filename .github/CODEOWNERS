@@ -1,18 +1,19 @@
 # CODEOWNERS — route les revues vers les bonnes personnes.
-# Les équipes ci-dessous sont des PLACEHOLDERS : remplace-les par de vrais
-# handles GitHub. Ce fichier n'impose rien tant que la protection de branche
-# « Require review from Code Owners » n'est pas activée.
+# Propriétaire unique actuel du dépôt (revue V2, point 7 : les équipes
+# fictives @platform-team/@security-team/@architecture-team ont été
+# remplacées par le handle réel). N'impose rien tant que la protection
+# de branche « Require review from Code Owners » n'est pas activée.
 
-/.github/workflows/    @platform-team
+/.github/workflows/    @Erwen-Beauvinon
 
 # Schéma, RLS et accès base (ADR-DATA-001)
-/migrations/           @platform-team
-/src/lib/db.ts         @platform-team
+/migrations/           @Erwen-Beauvinon
+/src/lib/db.ts         @Erwen-Beauvinon
 
 # Authentification et sessions
-/src/lib/auth.ts       @security-team
-/src/proxy.ts          @security-team
+/src/lib/auth.ts       @Erwen-Beauvinon
+/src/proxy.ts          @Erwen-Beauvinon
 
 # Décisions d'architecture
-/docs/adr/             @architecture-team
-/eslint.config.mjs     @architecture-team
+/docs/adr/             @Erwen-Beauvinon
+/eslint.config.mjs     @Erwen-Beauvinon
