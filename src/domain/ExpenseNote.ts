@@ -1,3 +1,5 @@
+import { DejaTranchee } from '@/domain/errors'
+
 export type ExpenseNoteStatus = 'pending' | 'approved' | 'rejected'
 
 export interface ExpenseNoteProps {
@@ -31,14 +33,18 @@ export class ExpenseNote {
 
   approve(): ExpenseNote {
     if (!this.canBeDecided()) {
-      throw new Error('Cette note a déjà été tranchée.')
+      // Erreur métier typée, message du contrat client figé (§4) :
+      // traduite en 409 par la couche interface, jamais en 500.
+      throw new DejaTranchee('Already decided')
     }
     return new ExpenseNote({ ...this.props, status: 'approved' })
   }
 
   reject(): ExpenseNote {
     if (!this.canBeDecided()) {
-      throw new Error('Cette note a déjà été tranchée.')
+      // Erreur métier typée, message du contrat client figé (§4) :
+      // traduite en 409 par la couche interface, jamais en 500.
+      throw new DejaTranchee('Already decided')
     }
     return new ExpenseNote({ ...this.props, status: 'rejected' })
   }

@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg'
 import type { Acteur } from '@/domain/Acteur'
-import type { Transaction } from '@/domain/Transaction'
+import type { Transaction } from '@/ports/UnitOfWork'
 import { executerTransaction } from '@/lib/db'
 import type { UnitOfWork } from '@/ports/UnitOfWork'
 
