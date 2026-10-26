@@ -1,0 +1,8 @@
+# Secrets factices assumés : valeurs de test de la CI uniquement,
+# jamais utilisées hors du job E2E éphémère (voir .github/workflows/ci.yml).
+[allowlist]
+description = "Secrets de test CI (dummy, basse entropie, job éphémère)"
+regexes = [
+  '''ci-e2e-dummy-secret-with-32plus-chars''',
+  '''ci-e2e-only-ci-e2e-only-ci-e2e-only''',
+]

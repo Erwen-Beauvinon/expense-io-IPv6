@@ -13,7 +13,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     // Phase 3 : la vérification « note de mon équipe » n'est plus
     // supposée — le cas d'usage l'applique (peutConsulter, I9).
-    return servirJustificatif(session, id, {
+    return await servirJustificatif(session, id, {
       notes: getNotes(),
       annuaire: getAnnuaire(),
       stockage: getStockageRecus(),
