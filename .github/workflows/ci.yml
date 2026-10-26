@@ -142,6 +142,11 @@ jobs:
       # base fraîchement seedée, avant les E2E. Le golden écrit (rejets,
       # soumission) : il doit passer en premier, sur le seed intact.
       - name: Golden (contrat client)
+        # `next start` hors Playwright : Auth.js refuse l'hôte (500
+        # « server configuration ») sans AUTH_TRUST_HOST. Playwright le
+        # fournit à son propre serveur (playwright.config.ts).
+        env:
+          AUTH_TRUST_HOST: 'true'
         run: |
           npx next start -p 3100 > golden-server.log 2>&1 &
           for i in $(seq 1 60); do
