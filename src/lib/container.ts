@@ -1,5 +1,7 @@
 import { ConsoleNotificationAdapter } from '@/adapters/ConsoleNotificationAdapter'
+import { PgExpenseNoteRepository } from '@/adapters/PgExpenseNoteRepository'
 import { S3ReceiptAdapter } from '@/adapters/S3ReceiptAdapter'
+import type { ExpenseNoteRepository } from '@/ports/ExpenseNoteRepository'
 import type { NotificationPort } from '@/ports/NotificationPort'
 import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'
 
@@ -8,6 +10,7 @@ import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'
 // d'usage et ce point, jamais un adaptateur directement.
 let stockageRecus: ReceiptStoragePort | undefined
 let notificateur: NotificationPort | undefined
+let notes: ExpenseNoteRepository | undefined
 
 export function getStockageRecus(): ReceiptStoragePort {
   if (!stockageRecus) stockageRecus = new S3ReceiptAdapter()
@@ -17,4 +20,9 @@ export function getStockageRecus(): ReceiptStoragePort {
 export function getNotificateur(): NotificationPort {
   if (!notificateur) notificateur = new ConsoleNotificationAdapter()
   return notificateur
+}
+
+export function getNotes(): ExpenseNoteRepository {
+  if (!notes) notes = new PgExpenseNoteRepository()
+  return notes
 }
