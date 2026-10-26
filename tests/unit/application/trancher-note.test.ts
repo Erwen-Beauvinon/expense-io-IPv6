@@ -114,10 +114,11 @@ function fauxDeps(
     }),
     listerRh: vi.fn(async () => []),
   } as unknown as AnnuaireOrganisation
+  const notifierDecision = vi.fn(async () => undefined)
   const notificateur = {
-    notifierDecision: vi.fn(async () => undefined),
+    notifierDecision,
   } as unknown as NotificationPort
-  return { notes, annuaire, notificateur, trancherSiEnAttente }
+  return { notes, annuaire, notificateur, notifierDecision, trancherSiEnAttente }
 }
 
 const valideur: Acteur = { id: 'manager-1', role: 'manager', companyId: 'c1' }
@@ -151,6 +152,35 @@ describe('trancherNote (ordre autorisation → motif)', () => {
     await expect(
       trancherNote(employe, 'note-1', 'approved', null, deps)
     ).rejects.toBeInstanceOf(NoteIntrouvable)
+  })
+
+  it('enregistre, notifie après commit et renvoie la vue', async () => {
+    const deps = fauxDeps(noteDe('employe-1', 'manager-1'))
+    const relue = await trancherNote(valideur, 'note-1', 'rejected', 'montant incohérent', deps)
+    expect(relue.note.id).toBe('note-1')
+    expect(deps.trancherSiEnAttente).toHaveBeenCalledWith(
+      valideur,
+      'note-1',
+      'rejected',
+      'montant incohérent'
+    )
+    expect(deps.notifierDecision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        noteId: 'note-1',
+        auteurId: 'employe-1',
+        decision: 'rejected',
+        decidedBy: 'manager-1',
+        motif: 'montant incohérent',
+      })
+    )
+  })
+
+  it('une notification en échec ne fait pas échouer la décision', async () => {
+    const deps = fauxDeps(noteDe('employe-1', 'manager-1'))
+    deps.notifierDecision.mockRejectedValueOnce(new Error('smtp down'))
+    await expect(
+      trancherNote(valideur, 'note-1', 'approved', null, deps)
+    ).resolves.toBeDefined()
   })
 })
 

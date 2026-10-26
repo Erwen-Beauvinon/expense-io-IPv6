@@ -37,4 +37,34 @@ export interface AnnuaireOrganisation {
   // rattachements concurrents ne s'entrelacent jamais, la détection de
   // cycle par lectures reste donc exacte.
   verrouillerRattachements(tx: Transaction, companyId: string): Promise<void>
+
+  // Phase 7 : inscription (I14, I15). Toutes ces opérations prennent
+  // la transaction du parcours public (executerPublic) : l'unicité
+  // email et email_domain est portée par les contraintes UNIQUE.
+  trouverUtilisateurParEmail(
+    tx: Transaction,
+    email: string
+  ): Promise<UtilisateurAnnuaire | null>
+
+  creerEntreprise(
+    tx: Transaction,
+    nom: string,
+    domaine: string
+  ): Promise<{ id: string; nouvelle: boolean }>
+
+  creerUtilisateur(
+    tx: Transaction,
+    entree: NouvelUtilisateur
+  ): Promise<UtilisateurAnnuaire>
+}
+
+// Entrée de création d'utilisateur (phase 7, revue §1) : exactement
+// ces 5 champs, ni plus ni moins — le rôle ne peut être que hr_admin
+// ou employee ici (I15 — jamais manager à l'inscription).
+export interface NouvelUtilisateur {
+  name: string
+  email: string
+  passwordHash: string
+  companyId: string
+  role: 'hr_admin' | 'employee'
 }

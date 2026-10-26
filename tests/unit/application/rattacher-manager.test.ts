@@ -37,6 +37,9 @@ function deps(parPersonne: Record<string, UtilisateurAnnuaire>) {
     listerRh: vi.fn(async () => []),
     rattacher: vi.fn(async () => {}),
     verrouillerRattachements: vi.fn(async () => {}),
+    trouverUtilisateurParEmail: vi.fn(async () => null),
+    creerEntreprise: vi.fn(async () => ({ id: 'c1', nouvelle: false })),
+    creerUtilisateur: vi.fn(async () => utilisateur({ id: 'u' })),
   } satisfies AnnuaireOrganisation
   const unitOfWork = {
     executer: vi.fn(async (_acteur: Acteur, travail: (tx: unknown) => Promise<UtilisateurAnnuaire>) =>
