@@ -16,8 +16,10 @@ import {
 
 const ACTEUR: Acteur = { id: 'emp', role: 'employee', companyId: 'c1' }
 
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
 function recu(partiel = {}) {
-  return { data: Buffer.from([1, 2, 3]), mimeType: 'image/png', size: 3, ...partiel }
+  return { data: PNG, mimeType: 'image/png', size: PNG.length, ...partiel }
 }
 
 function soumission(partiel: Partial<SoumissionBrute> = {}): SoumissionBrute {
@@ -125,9 +127,27 @@ describe('soumettreNote (I4)', () => {
     expect(d.notes.creer).not.toHaveBeenCalled()
   })
 
+  it('refuse des octets qui ne correspondent pas au type déclaré (revue V2, point 8)', async () => {
+    const d = deps()
+    await expect(
+      soumettreNote(
+        ACTEUR,
+        soumission({ recu: recu({ data: Buffer.from('<html>pas un png</html>') }) }),
+        d
+      )
+    ).rejects.toThrow(DonneesInvalides)
+    expect(d.stockage.upload).not.toHaveBeenCalled()
+  })
+
   it('accepte le PDF avec la bonne extension de clé', async () => {
     const d = deps()
-    await soumettreNote(ACTEUR, soumission({ recu: recu({ mimeType: 'application/pdf' }) }), d)
+    await soumettreNote(
+      ACTEUR,
+      soumission({
+        recu: recu({ mimeType: 'application/pdf', data: Buffer.from('%PDF-1.7 contenu') }),
+      }),
+      d
+    )
     expect(d.stockage.upload).toHaveBeenCalledWith('receipts/42.pdf', expect.any(Buffer), 'application/pdf')
   })
 

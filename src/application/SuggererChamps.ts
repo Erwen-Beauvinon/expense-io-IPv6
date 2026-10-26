@@ -2,6 +2,7 @@ import type {
   AnalyseurDeRecu,
   SuggestionRecu,
 } from '@/ports/AnalyseurDeRecu'
+import { validerOctetsRecu } from '@/application/SoumettreNote'
 
 // Cas d'usage de suggestion du montant et de la date par OCR
 // (phase 5) : porte les limites (taille, types acceptés) comme règles
@@ -35,6 +36,13 @@ export async function suggererChamps(
   // Hors gabarit : réponse vide, comme pour un reçu illisible
   // (contrat client C03 : {} est une réponse valide).
   if (contenantHorsGabarit(entree)) return {}
+  // Octets incohérents avec le type déclaré (revue V2, point 8) :
+  // même réponse vide, rien n'est transmis au moteur OCR.
+  try {
+    validerOctetsRecu(entree)
+  } catch {
+    return {}
+  }
   // Annulation réelle (revue phase/5 §2, F7) : au délai, le signal
   // demande au moteur de terminer son travail (worker Tesseract tué)
   // au lieu de le laisser tourner en tâche de fond. La course borne

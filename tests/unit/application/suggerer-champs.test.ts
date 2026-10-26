@@ -21,7 +21,7 @@ describe('suggererChamps (contrat C03 : {} est une réponse valide)', () => {
     const deps = { analyseur: analyseur({ amount: 12.5 }) }
     await expect(
       suggererChamps(
-        { data: Buffer.from([1]), mimeType: 'image/png', size: 10 },
+        { data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), mimeType: 'image/png', size: 10 },
         deps
       )
     ).resolves.toEqual({ amount: 12.5 })
@@ -32,7 +32,7 @@ describe('suggererChamps (contrat C03 : {} est une réponse valide)', () => {
     async (mimeType) => {
       const deps = { analyseur: analyseur({}) }
       await expect(
-        suggererChamps({ data: Buffer.from([1]), mimeType, size: 10 }, deps)
+        suggererChamps({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), mimeType, size: 10 }, deps)
       ).resolves.toEqual({})
       expect(deps.analyseur.analyser).not.toHaveBeenCalled()
     }
@@ -42,7 +42,7 @@ describe('suggererChamps (contrat C03 : {} est une réponse valide)', () => {
     const deps = { analyseur: analyseur({}) }
     await expect(
       suggererChamps(
-        { data: Buffer.from([1]), mimeType: 'image/png', size: TAILLE_MAX_SUGGESTION + 1 },
+        { data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), mimeType: 'image/png', size: TAILLE_MAX_SUGGESTION + 1 },
         deps
       )
     ).resolves.toEqual({})
@@ -54,14 +54,14 @@ describe('suggererChamps (contrat C03 : {} est une réponse valide)', () => {
       analyseur: { analyser: vi.fn(async () => { throw new Error('tesseract down') }) },
     }
     await expect(
-      suggererChamps({ data: Buffer.from([1]), mimeType: 'image/png', size: 10 }, deps)
+      suggererChamps({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), mimeType: 'image/png', size: 10 }, deps)
     ).resolves.toEqual({})
   })
 
   it('répond {} quand le moteur dépasse le délai', async () => {
     const deps = { analyseur: analyseur({}, 5000) }
     await expect(
-      suggererChamps({ data: Buffer.from([1]), mimeType: 'image/png', size: 10 }, deps, 50)
+      suggererChamps({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), mimeType: 'image/png', size: 10 }, deps, 50)
     ).resolves.toEqual({})
   })
 
@@ -85,7 +85,7 @@ describe('suggererChamps (contrat C03 : {} est une réponse valide)', () => {
       },
     }
     await expect(
-      suggererChamps({ data: Buffer.from([1]), mimeType: 'image/png', size: 10 }, deps, 20)
+      suggererChamps({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), mimeType: 'image/png', size: 10 }, deps, 20)
     ).resolves.toEqual({})
     expect(avorte).toBe(true)
     const appel = deps.analyseur.analyser.mock.calls[0][0]

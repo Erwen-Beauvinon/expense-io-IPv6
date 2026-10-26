@@ -39,6 +39,30 @@ export function validerContenantRecu(contenant: {
   }
 }
 
+// Signature réelle des formats acceptés (revue V2, point 8) : le
+// type MIME déclaré par le client ne prouve rien sur les octets. Un
+// contenu qui ne commence pas par la signature de son type déclaré
+// est refusé avant tout envoi au stockage.
+const SIGNATURES: Record<string, (data: Buffer) => boolean> = {
+  'image/png': (d) =>
+    d.length >= 8 &&
+    d.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  'image/jpeg': (d) => d.length >= 3 && d[0] === 0xff && d[1] === 0xd8 && d[2] === 0xff,
+  'image/webp': (d) =>
+    d.length >= 12 &&
+    d.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    d.subarray(8, 12).toString('ascii') === 'WEBP',
+  'application/pdf': (d) =>
+    d.length >= 5 && d.subarray(0, 5).toString('ascii') === '%PDF-',
+}
+
+export function validerOctetsRecu(recu: { data: Buffer; mimeType: string }): void {
+  const verifier = SIGNATURES[recu.mimeType]
+  if (!verifier || !verifier(recu.data)) {
+    throw new DonneesInvalides('Type de fichier non autorisé pour le reçu')
+  }
+}
+
 export interface SoumissionBrute {
   montant: unknown
   dateDepense: unknown
@@ -112,6 +136,7 @@ export async function soumettreNote(
   const recu = soumission.recu
   if (!recu) throw new DonneesInvalides('Justificatif manquant')
   validerContenantRecu(recu)
+  validerOctetsRecu(recu)
 
   // Clé préservée au format gelé (contrat client §4) : la séquence est
   // réservée avant l'envoi ; un trou après échec est sans signification.
