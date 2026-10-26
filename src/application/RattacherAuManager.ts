@@ -4,7 +4,7 @@ import {
   CycleHierarchique,
   DonneesInvalides,
   ManagerIneligible,
-  NoteIntrouvable,
+  UtilisateurIntrouvable,
 } from '@/domain/errors'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 import type { AnnuaireOrganisation } from '@/ports/AnnuaireOrganisation'
@@ -69,7 +69,7 @@ export async function rattacherAuManager(
 
     const cible = await lire(userId)
     if (!cible || (cible.role !== 'employee' && cible.role !== 'manager')) {
-      throw new NoteIntrouvable('Not found')
+      throw new UtilisateurIntrouvable('Not found')
     }
 
     if (managerIdValide !== null) {
@@ -93,7 +93,7 @@ export async function rattacherAuManager(
 
     await deps.annuaire.rattacher(tx, acteur.companyId, userId, managerIdValide)
     const relue = await lire(userId)
-    if (!relue) throw new NoteIntrouvable('Not found')
+    if (!relue) throw new UtilisateurIntrouvable('Not found')
     return relue
   })
 }

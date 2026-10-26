@@ -2,7 +2,7 @@ import type { Acteur } from '@/domain/Acteur'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
-import type { Transaction } from '@/domain/Transaction'
+import type { Transaction } from '@/ports/UnitOfWork'
 
 // Entrée de création (phase 5) : déjà validée par SoumettreNote
 // (montant I1, date I2, reçu I4). Le reçu est envoyé avant.

@@ -1,4 +1,4 @@
-import type { UserRole } from '@/domain/User'
+import type { UserRole } from '@/domain/Role'
 
 // Acteur serveur (docs/contrats-ports.md §1.2) : identité + rôle +
 // entreprise, construits côté serveur depuis la session. Jamais depuis

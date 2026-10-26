@@ -1,4 +1,4 @@
-import type { Transaction } from '@/domain/Transaction'
+import type { Transaction } from '@/ports/UnitOfWork'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 
 // Port AnnuaireOrganisation, lecture (docs/contrats-ports.md §4).

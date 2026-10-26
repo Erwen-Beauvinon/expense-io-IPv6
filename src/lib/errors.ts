@@ -13,6 +13,7 @@ function statutErreurMetier(error: ErreurMetier): number {
     case 'AccesRefuse':
       return 403
     case 'NoteIntrouvable':
+    case 'UtilisateurIntrouvable':
       return 404
     case 'DejaTranchee':
     case 'ManagerIneligible':

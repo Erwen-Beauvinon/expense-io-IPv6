@@ -3,7 +3,7 @@ import { ExpenseNote } from '@/domain/ExpenseNote'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
-import type { Transaction } from '@/domain/Transaction'
+import type { Transaction } from '@/ports/UnitOfWork'
 import { getPool, withUserScope } from '@/lib/db'
 import type {
   ExpenseNoteRepository,
