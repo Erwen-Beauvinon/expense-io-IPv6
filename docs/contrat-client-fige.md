@@ -130,7 +130,10 @@ est un blocage.
    (`hr@expense.io`, `manager@expense.io`, `demo@expense.io`) :
    pour chaque appel C01–C11 en succès, enregistrer statut et corps,
    en normalisant les valeurs volatiles (`id`, `receiptKey`, `url`,
-   `createdAt` remplacés par des marqueurs de type).
+   `createdAt` remplacés par des marqueurs de type). L'`expenseDate`
+   des notes du seed (datées `CURRENT_DATE`) devient `<seedDate>`,
+   seulement si elle reste une chaîne `YYYY-MM-DD` ; la date de la
+   note soumise par la capture (C02) est comparée telle quelle.
 2. **Rejeu après chaque migration** de cas d'usage ou correctif :
    le diff golden doit être vide hors normalisation. Tout écart est un
    blocage, sauf s'il correspond à un cas du §5, cité dans le ticket.

@@ -92,7 +92,7 @@ test-e2e: up migrate ensure-bucket ## Tests E2E Playwright (Docker requis ; dém
 	npm run test:e2e
 
 golden: ## Capture le contrat client et compare au golden de référence (serveur + seed requis, BASE en option)
-	BASE=$${BASE:-http://localhost:3101} node scripts/capture-golden.mjs > /tmp/golden.live.json && node scripts/check-golden.mjs /tmp/golden.live.json
+	BASE=$${BASE:-http://localhost:3100} node scripts/capture-golden.mjs > /tmp/golden.live.json && node scripts/check-golden.mjs /tmp/golden.live.json
 
 validate-adrs: ## Vérifie le format des ADR (docs/adr/)
 	@node scripts/validate-adrs.mjs

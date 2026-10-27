@@ -31,10 +31,25 @@ jamais sur le dépôt amont `NathanPrats/expense-io` ni sur un autre dépôt.
 | Tests unitaires / un seul test | `make test` / `npx vitest run tests/unit/domain -t "nom"` |
 | Format des ADR | `make validate-adrs` |
 | Tests E2E (Docker requis) / un seul fichier | `make test-e2e` / `npx playwright test tests/e2e/manager.spec.ts` |
+| Tests d'intégration (Docker, migrations et seed requis) | `RUN_INTEGRATION=1 npx vitest run tests/integration` |
+| Contrat client (golden ; seed frais, serveur sur 3100) | `make golden` |
 
-`make verify` ne démarre ni PostgreSQL ni LocalStack. Les parcours de
-l'interface sont couverts par les E2E (`tests/e2e/`, job CI `e2e`), mais
-la RLS et les accès directs à l'API ne sont toujours testés par rien (voir [backlog](docs/backlog.md)).
+`make verify` ne démarre ni PostgreSQL ni LocalStack : les tests
+d'intégration s'y ignorent d'eux-mêmes sans `RUN_INTEGRATION=1`. Le job CI
+`e2e` exécute tout ce qui demande Docker, dans cet ordre : golden sur le
+seed intact (le golden écrit), E2E, puis intégration sous le rôle
+applicatif `expense_app`.
+
+| Couche | Ce qui est prouvé | Où |
+|---|---|---|
+| Domaine et cas d'usage | Règles, autorisations, 409/404, ports en mémoire | `tests/unit/` |
+| PostgreSQL | RLS sur deux entreprises sous `expense_app`, inscription | `tests/integration/` |
+| HTTP | Contrat client C01–C11 (statuts et corps) | `tests/contract/` + `make golden` |
+| Interface | Parcours employé, manager, RH, inscription | `tests/e2e/` |
+
+Non prouvé à ce jour (voir [backlog](docs/backlog.md) #001 et #002) : accès
+croisés directs à l'API au niveau HTTP, et deux décisions simultanées sur
+une vraie base (la garde 409 n'est testée qu'en unitaire).
 
 Les E2E figent le comportement **actuel** visible par l'utilisateur. Si une
 refonte en casse un, c'est une régression tant qu'aucun ADR n'a acté le
