@@ -16,20 +16,25 @@ test.describe('RH', () => {
     await expect(managerRow.getByRole('combobox')).toHaveValue('')
   })
 
-  test('tranche les notes des managers racine, pas celles des employés', async ({
+  // Lecture A (ADR-ARCH-002 amendé le 2026-10-26, contrat client §10) :
+  // le RH est N+1 de l'équipe d'un manager racine — il voit et tranche
+  // aussi les notes de cette équipe, pour qu'aucune ne reste bloquée si
+  // le manager est indisponible.
+  test('tranche les notes des managers racine et de leurs équipes', async ({
     page,
     company,
   }) => {
     const approvedId = await createNote(company.manager, { description: 'Salon pro' })
     const rejectedId = await createNote(company.manager, { description: 'Dîner perso' })
-    await createNote(company.employee, { description: 'Note employé' })
+    const employeeNoteId = await createNote(company.employee, { description: 'Note employé' })
 
     await login(page, company.hr)
     await page.goto('/hr')
     await expect(
-      page.getByRole('heading', { name: 'Notes des managers racine en attente (2)' })
+      page.getByRole('heading', { name: 'Notes des managers racine en attente (3)' })
     ).toBeVisible()
-    await expect(noteRow(page, 'Note employé')).toHaveCount(0)
+    // La note de l'employé du manager racine figure dans la file RH.
+    await expect(noteRow(page, 'Note employé')).toContainText(company.employee.name)
     // La colonne auteur affiche le nom du manager.
     await expect(noteRow(page, 'Salon pro')).toContainText(company.manager.name)
 
@@ -40,8 +45,12 @@ test.describe('RH', () => {
     await noteRow(page, 'Dîner perso').getByRole('button', { name: 'Confirmer le rejet' }).click()
     await expect(noteRow(page, 'Dîner perso')).toHaveCount(0)
 
+    await noteRow(page, 'Note employé').getByRole('button', { name: 'Approuver' }).click()
+    await expect(noteRow(page, 'Note employé')).toHaveCount(0)
+
     expect(await noteStatus(approvedId)).toBe('approved')
     expect(await noteStatus(rejectedId)).toBe('rejected')
+    expect(await noteStatus(employeeNoteId)).toBe('approved')
   })
 
   test('ouvre le reçu d’une note de manager racine', async ({ page, company }) => {

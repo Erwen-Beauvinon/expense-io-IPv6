@@ -94,21 +94,14 @@ export function besoinDesRh(
   )
 }
 
-// File « à trancher » d'un acteur : les notes en attente dont il est
-// valideur. Exception RH (ADR-ARCH-002, « file restreinte ») : la file
-// RH ne liste que les auteurs sans manager et les RH ; le pouvoir de
-// décision sur les équipes des managers racines reste accessible par
-// l'API. Définition de référence : la requête SQL de
-// `listerEnAttentePour` doit dire la même chose (test de concordance,
-// tests/integration/concordance-valideurs.test.ts).
-export function figureDansLaFile(
-  acteur: Acteur,
-  auteur: AuteurNote,
-  valideurs: string[]
-): boolean {
-  if (!valideurs.includes(acteur.id)) return false
-  if (acteur.role !== 'hr_admin') return true
-  return auteur.managerId === null || auteur.role === 'hr_admin'
+// File « à trancher » d'un acteur : exactement les notes en attente dont
+// il est valideur, pour un manager comme pour un RH (lecture A,
+// amendement ADR-ARCH-002 du 2026-10-26 — plus de file RH restreinte :
+// un RH voit aussi les équipes des managers racines, dont il est N+1).
+// Définition de référence : la requête SQL de `listerEnAttentePour` doit
+// dire la même chose (tests/integration/concordance-valideurs.test.ts).
+export function figureDansLaFile(acteur: Acteur, valideurs: string[]): boolean {
+  return valideurs.includes(acteur.id)
 }
 
 export function peutConsulter(

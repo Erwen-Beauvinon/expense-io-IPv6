@@ -41,15 +41,15 @@ export const VALIDEURS_ATTENDUS: Record<string, string[]> = {
 }
 
 // File « à trancher » attendue de chaque décideur (figureDansLaFile) :
-// manager = toutes ses notes de valideur ; RH = file restreinte (auteurs
-// sans manager et RH).
+// toutes les notes dont il est valideur (lecture A, ADR-ARCH-002 amendé) —
+// un RH y voit aussi les équipes des managers racines (eDirect, mInter).
 export const FILES_ATTENDUES: Record<string, string[]> = {
   mRacine: ['eDirect', 'mInter', 'eN1'],
   mInter: ['eN1'],
   mB: ['eB'],
-  hrA: ['mRacine', 'eOrphelin'],
-  hrA2: ['mRacine', 'eOrphelin', 'hrA'],
-  hrB: [],
+  hrA: ['mRacine', 'eOrphelin', 'eDirect', 'mInter'],
+  hrA2: ['mRacine', 'eOrphelin', 'hrA', 'eDirect', 'mInter'],
+  hrB: ['eB'],
 }
 
 export const AUTEURS = Object.keys(VALIDEURS_ATTENDUS)

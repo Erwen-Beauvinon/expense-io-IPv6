@@ -57,9 +57,9 @@ export interface ExpenseNoteRepository {
     motif: Motif | null
   ): Promise<boolean>
 
-  // Phase 4 : notes en attente visibles par l'acteur (I8) — manager :
-  // managés directs ; RH : toute l'entreprise. N+1 exclu (repli propre
-  // jusqu'à l'alignement RLS, phase 8).
+  // Notes en attente dont l'acteur est valideur (ADR-ARCH-002, lecture A) :
+  // manager — managés directs et N+1 ; RH — auteurs sans manager, notes
+  // des autres RH et équipes des managers racines. Jamais les siennes.
   listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]>
 
   // Phase 5 : réserve un numéro de séquence pour la clé du reçu

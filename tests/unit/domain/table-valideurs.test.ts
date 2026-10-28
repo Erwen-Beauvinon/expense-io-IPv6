@@ -48,11 +48,7 @@ describe('table de vérité des valideurs (ADR-ARCH-002) — domaine', () => {
     const file = AUTEURS.filter((auteur) => {
       const auteurMembre = ORGANIGRAMME[auteur]
       if (auteurMembre.entreprise !== membre.entreprise) return false
-      return figureDansLaFile(
-        acteur,
-        { id: auteur, role: auteurMembre.role, managerId: auteurMembre.manager },
-        valideursDe(auteur)
-      )
+      return figureDansLaFile(acteur, valideursDe(auteur))
     })
     expect(file.sort()).toEqual([...FILES_ATTENDUES[decideur]].sort())
   })
