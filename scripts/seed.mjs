@@ -69,6 +69,8 @@ const s3 = new S3Client({
 const bucket = process.env.S3_BUCKET ?? 'receipts'
 
 async function resolveCompany() {
+  // Même règle que nomEntrepriseDepuisDomaine (src/domain/Inscription.ts),
+  // recopiée ici : ce script .mjs n'importe pas le TypeScript.
   const companyName = domain.split('.')[0]
   const inserted = await pool.query(
     `INSERT INTO companies (name, email_domain) VALUES ($1, $2)

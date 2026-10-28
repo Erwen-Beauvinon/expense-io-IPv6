@@ -1,5 +1,6 @@
 import type { Acteur } from '@/domain/Acteur'
 import {
+  besoinDesRh,
   calculerValideurs,
   type AuteurNote,
   type NoeudHierarchique,
@@ -33,18 +34,11 @@ export async function resoudreValidateurs(
     return noeud
   }
   // Deux niveaux suffisent : manager direct et son propre manager.
-  // Les RH ne sont lus que si la règle peut en avoir besoin (revues
-  // phase/3 : auteur RH, sans manager, ou direct racine/inconnu —
-  // jamais pour un auteur rattaché à une ligne non racine).
+  // Les RH ne sont lus que si la règle du domaine peut en avoir besoin
+  // (besoinDesRh, revues phase/3).
   const direct = auteur.managerId ? await parentDe(auteur.managerId) : null
   if (direct && direct.managerId) await parentDe(direct.managerId)
-  const besoinRh =
-    auteur.role === 'hr_admin' ||
-    !auteur.managerId ||
-    !direct ||
-    direct.role !== 'manager' ||
-    !direct.managerId
-  const rh = besoinRh ? await annuaire.listerRh(acteur.companyId) : []
+  const rh = besoinDesRh(auteur, direct) ? await annuaire.listerRh(acteur.companyId) : []
   return calculerValideurs(auteur, {
     parentDe: (userId: string) => parents.get(userId) ?? null,
     rhDeEntreprise: () => rh.map((utilisateur) => utilisateur.id),

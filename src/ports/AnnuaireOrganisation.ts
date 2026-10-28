@@ -1,4 +1,5 @@
-import type { Transaction } from '@/domain/Transaction'
+import type { Transaction } from '@/ports/UnitOfWork'
+import type { RoleInscription } from '@/domain/Inscription'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 
 // Port AnnuaireOrganisation, lecture (docs/contrats-ports.md §4).
@@ -52,19 +53,22 @@ export interface AnnuaireOrganisation {
     domaine: string
   ): Promise<{ id: string; nouvelle: boolean }>
 
+  // null si l'email est déjà pris (course perdue sur UNIQUE(email)) :
+  // le conflit est traduit par l'adaptateur, aucun code d'erreur de la
+  // base ne remonte au cas d'usage (contrats des ports §1.3).
   creerUtilisateur(
     tx: Transaction,
     entree: NouvelUtilisateur
-  ): Promise<UtilisateurAnnuaire>
+  ): Promise<UtilisateurAnnuaire | null>
 }
 
 // Entrée de création d'utilisateur (phase 7, revue §1) : exactement
-// ces 5 champs, ni plus ni moins — le rôle ne peut être que hr_admin
-// ou employee ici (I15 — jamais manager à l'inscription).
+// ces 5 champs, ni plus ni moins — le rôle est un RoleInscription du
+// domaine, qui exclut manager (I15).
 export interface NouvelUtilisateur {
   name: string
   email: string
   passwordHash: string
   companyId: string
-  role: 'hr_admin' | 'employee'
+  role: RoleInscription
 }

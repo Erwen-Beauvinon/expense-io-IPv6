@@ -90,10 +90,10 @@ interface ExpenseNoteRepository {
 
   listerParAuteur(acteur: Acteur, auteurId: string, tri: OrdreTri): Promise<NoteAvecAuteur[]>
 
-  // Notes pending du périmètre de décision courant (ADR-ARCH-002) :
-  // manager — notes de ses managés directs ET indirects (N+1) ;
-  // RH — notes des auteurs sans manager (managers racines, employés
-  // non rattachés, notes de RH), hors ses propres notes (I7).
+  // Notes pending dont l'acteur est valideur (ADR-ARCH-002, lecture A) :
+  // manager — managés directs ET indirects (N+1) ; RH — auteurs sans
+  // manager, notes des autres RH et équipes des managers racines ;
+  // jamais ses propres notes (I7).
   // Tri `created_at` croissant, comme les anciennes requêtes.
   listerEnAttentePour(acteur: Acteur): Promise<NoteAvecAuteur[]>
 
@@ -109,16 +109,18 @@ interface ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null,
-    horodatage: Date,
-  ): Promise<boolean>
+    motif: Motif | null,          // objet valeur du domaine (src/domain/Motif.ts)
+  ): Promise<boolean>             // decided_at = now() SQL, horloge unique
 }
 
+// Objets valeur du domaine (src/domain/) : constructeur privé, aucune
+// instance invalide possible — un nombre ou une chaîne bruts ne
+// compilent pas. L'adaptateur lit `.valeur`.
 interface NouvelleNote {
   auteurId: string
-  montant: number              // déjà validé par l'objet métier Montant (I1)
-  dateDepense: string          // YYYY-MM-DD validée (I2)
-  description: string          // vérifiée non vide, stockée telle quelle (I3)
+  montant: Montant             // I1 (src/domain/Montant.ts)
+  dateDepense: DateDepense     // I2, reste une chaîne YYYY-MM-DD
+  description: Description     // I3, stockée rognée
   receiptKey: string           // clé d'un objet déjà stocké (I4, §6)
 }
 ```
@@ -134,12 +136,17 @@ Garanties attendues de l'implémentation :
   `SELECT` préalable décisionnel. L'autorisation reste vérifiée avant
   par le cas d'usage (404 propre), l'écriture la réévalue
   atomiquement (ADR-ARCH-002 §3) ;
+- le prédicat « l'acteur est valideur » n'existe qu'**une fois** en SQL
+  (`predicatValideur`, exporté par `PgExpenseNoteRepository`), partagé
+  par `trancherSiEnAttente` et les files de tous les décideurs ; sa
+  concordance avec
+  `calculerValideurs` et les policies RLS est prouvée par
+  `tests/integration/concordance-valideurs.test.ts` ;
 - `listerEnAttentePour` se déduit du rattachement **courant**
-  (ADR-ARCH-002) : aucun valideur stocké n'est lu. La liste RH est
-  une file de routage (auteurs sans manager), pas l'ensemble du
-  pouvoir de décision : un RH valideur d'une équipe racine (tableau
-  ADR-ARCH-002 ligne 2) tranche via l'API, même si la note n'est
-  pas dans sa file — plein pouvoir, file restreinte (e2e RH) ;
+  (ADR-ARCH-002) : aucun valideur stocké n'est lu. Pour un manager
+  comme pour un RH, la file est exactement l'ensemble des notes en
+  attente dont il est valideur (lecture A, amendement ADR-ARCH-002 du
+  2026-10-26) : un RH y voit aussi les équipes des managers racines ;
 - `reserverSequence` lit `pg_get_serial_sequence('expense_notes',
   'receipt_seq')` (nom auto-généré jamais codé en dur).
 
@@ -171,7 +178,9 @@ interface AnnuaireOrganisation {
 
   // Inscription (I14, I15)
   creerEntreprise(tx: Transaction, nom: string, domaine: string): Promise<{ id: string; nouvelle: boolean }>
-  creerUtilisateur(tx: Transaction, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire>
+  // null si l'email est déjà pris : l'adaptateur traduit la violation
+  // d'unicité, le cas d'usage ne voit aucun code d'erreur de la base.
+  creerUtilisateur(tx: Transaction, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire | null>
 }
 ```
 
@@ -196,6 +205,8 @@ interface UnitOfWork {
 
 // Poignée opaque : aucun accès SQL n'en sort ; seuls les repositories
 // savent l'utiliser. Ni commit ni rollback exposés.
+// Déclarée dans src/ports/UnitOfWork.ts, avec le port qui la produit
+// (notion technique : elle ne vit pas dans le domaine).
 interface Transaction { readonly _marque: unique symbol }
 ```
 
@@ -259,10 +270,11 @@ interface, les convertit — le reste du code ne fabrique plus de
 |---|---|---|---|
 | `DonneesInvalides` | I1, I2, I3, tri hors liste | 400 | message actuel conservé |
 | `NoteIntrouvable` | inexistante ou hors `peutConsulter` | 404 | `Not found` |
+| `UtilisateurIntrouvable` | utilisateur absent ou hors entreprise (rattachement) | 404 | `Not found` |
 | `AccesRefuse` | rôle insuffisant (jamais de détail métier) | 403 | `Unauthorized` |
 | `DejaTranchee` | I6 | 409 | `Already decided` (gelé) |
 | `ManagerIneligible` | I11, I13 | 409 | `Invalid manager` (gelé) |
-| `CycleHierarchique` | I12 | 409 | à libeller, cas nouveau |
+| `CycleHierarchique` | I12 | 409 | `Cycle hiérarchique détecté` |
 | Panne d'infrastructure | port en échec | 500 | `error` générique, **sans stack** |
 
 Deux règles héritées des constats : `404` plutôt que `403` quand
@@ -298,12 +310,13 @@ Contrat :
 - exception réservée à la panne du moteur ; `SuggérerChamps` la
   traduit en `{}` journalisé, comme aujourd'hui — le client ne voit
   pas la différence ;
-- les **bornes** sont portées par le cas d'usage, pas par
-  l'adaptateur : types image acceptés (png/jpeg/webp, pas le PDF),
-  taille ≤ 10 Mio alignée sur I3, vérifiées sur les métadonnées avant
-  lecture des octets (revue phase/5, F7), délai 15 s avec annulation
-  réelle (signal honoré, worker terminé) et plafond de concurrence
-  côté adaptateur (saturation → `{}`) ;
+- le **gabarit** est une règle du domaine (`src/domain/Justificatif.ts`,
+  `horsGabaritSuggestion`), pas de l'adaptateur : types image acceptés
+  (png/jpeg/webp, pas le PDF), taille ≤ 10 Mio alignée sur I3,
+  vérifiés sur les métadonnées avant lecture des octets (revue
+  phase/5, F7). Le délai de 15 s avec annulation réelle reste dans le
+  cas d'usage, le plafond de concurrence dans l'adaptateur
+  (saturation → `{}`) : ce sont des bornes techniques ;
 - extension future sans rupture : des champs optionnels (score de
   confiance, moteur utilisé) pourront enrichir `SuggestionRecu` côté
   serveur ; seuls `amount` et `expenseDate` traversent vers le client
@@ -380,6 +393,8 @@ assemblées ». Contrat minimal attendu de ce point :
    coexistence durable de deux contrats de stockage ou de
    notification.
 
-Reste hors de ce document : le modèle de rôles SQL pour rendre I10
-réel en base (rôle applicatif non-superutilisateur avant la phase 4),
-à coordonner avec le pilote 2 — voir ADR-DATA-002 (draft).
+Hors de ce document : le modèle de rôles SQL qui rend I10 réel en
+base. Il est décidé et implémenté — rôle applicatif `expense_app`,
+non-superutilisateur, migrations `0003` et `0005`, voir ADR-DATA-002
+(`accepted`). Seul le secret de production reste à la charge du
+pilote 2.

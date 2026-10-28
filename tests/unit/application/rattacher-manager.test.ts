@@ -5,7 +5,7 @@ import {
   CycleHierarchique,
   DonneesInvalides,
   ManagerIneligible,
-  NoteIntrouvable,
+  UtilisateurIntrouvable,
 } from '@/domain/errors'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 import type { AnnuaireOrganisation } from '@/ports/AnnuaireOrganisation'
@@ -71,7 +71,7 @@ describe('rattacherAuManager (I11–I13)', () => {
 
   it('refuse une cible inconnue ou hors entreprise (404, pas de fuite)', async () => {
     const d = deps(EQUIPE)
-    await expect(rattacherAuManager(RH, 'inconnu', 'm2', d)).rejects.toThrow(NoteIntrouvable)
+    await expect(rattacherAuManager(RH, 'inconnu', 'm2', d)).rejects.toThrow(UtilisateurIntrouvable)
     expect(d.annuaire.rattacher).not.toHaveBeenCalled()
   })
 

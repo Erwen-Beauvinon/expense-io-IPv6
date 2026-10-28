@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SuggestionRecu } from '@/ports/AnalyseurDeRecu'
-import {
-  suggererChamps,
-  TAILLE_MAX_SUGGESTION,
-} from '@/application/SuggererChamps'
+import { suggererChamps } from '@/application/SuggererChamps'
+import { TAILLE_MAX_SUGGESTION } from '@/domain/Justificatif'
 
 function analyseur(resultat: SuggestionRecu, delai = 0) {
   return {

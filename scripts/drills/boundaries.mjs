@@ -14,7 +14,7 @@ const FORBIDDEN = [
   ['src/domain', "import { S3ReceiptAdapter } from '@/adapters/S3ReceiptAdapter'"],
   ['src/ports', "import { S3ReceiptAdapter } from '@/adapters/S3ReceiptAdapter'"],
   ['src/ports', "import { getPool } from '@/lib/db'"],
-  ['src/utils', "import { User } from '@/domain/User'"],
+  ['src/utils', "import { DejaTranchee } from '@/domain/errors'"],
   ['src/utils', "import { auth } from '@/lib/auth'"],
   ['src/lib', "import { NavItem } from '@/components/NavItem'"],
   ['src/adapters', "import { NavItem } from '@/components/NavItem'"],
@@ -34,7 +34,7 @@ const FORBIDDEN = [
 ]
 
 const PERMITTED = [
-  ['src/domain', "import { User } from './User'"],
+  ['src/domain', "import { DejaTranchee } from './errors'"],
   ['src/ports', "import { ExpenseNote } from '@/domain/ExpenseNote'"],
   ['src/adapters', "import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'"],
   ['src/adapters', "import { getPool } from '@/lib/db'"],

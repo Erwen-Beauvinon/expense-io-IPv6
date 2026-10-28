@@ -19,6 +19,7 @@ import { PgUnitOfWork } from '@/adapters/PgUnitOfWork'
 import { S3ReceiptAdapter } from '@/adapters/S3ReceiptAdapter'
 import { soumettreNote, type SoumissionBrute } from '@/application/SoumettreNote'
 import type { Acteur } from '@/domain/Acteur'
+import type { Montant } from '@/domain/Montant'
 import type { ExpenseNoteRepository } from '@/ports/ExpenseNoteRepository'
 import type { ReceiptStoragePort } from '@/ports/ReceiptStoragePort'
 
@@ -227,7 +228,10 @@ suite('soumission d’une note : PostgreSQL et S3 restent cohérents (I4, F07)',
       get(cible, propriete, recepteur) {
         if (propriete === 'creer') {
           return (...[tx, entree]: Parameters<ExpenseNoteRepository['creer']>) =>
-            cible.creer(tx, { ...entree, montant: 1e12 })
+            // Contournement volontaire de l'objet valeur Montant (lot 2) :
+            // le domaine interdit de construire ce montant, le test force
+            // la forme pour éprouver le refus de la base elle-même.
+            cible.creer(tx, { ...entree, montant: { valeur: 1e12 } as unknown as Montant })
         }
         const valeur = Reflect.get(cible, propriete, recepteur)
         return typeof valeur === 'function' ? valeur.bind(cible) : valeur

@@ -26,21 +26,23 @@ export async function accederAuJustificatif(
   // l'existence ni l'appartenance de la note (contrat figé).
   if (!cible) throw new NoteIntrouvable('Not found')
 
-  // Raccourci auteur (revues phase/3) : l'auteur consulte toujours sa
-  // note — inutile de résoudre puis d'appeler l'annuaire pour lui.
-  if (acteur.id !== cible.auteurId) {
-    const valideurs = await resoudreValidateurs(
-      acteur,
-      {
-        id: cible.auteurId,
-        role: cible.auteurRole,
-        managerId: cible.auteurManagerId,
-      },
-      deps.annuaire
-    )
-    if (!peutConsulter(acteur, cible, valideurs)) {
-      throw new NoteIntrouvable('Not found')
-    }
+  // La règle est entièrement dans peutConsulter (I9), auteur compris.
+  // Optimisation seulement (revues phase/3) : pour l'auteur, les
+  // valideurs ne sont pas résolus — peutConsulter n'en a pas besoin.
+  const valideurs =
+    acteur.id === cible.auteurId
+      ? []
+      : await resoudreValidateurs(
+          acteur,
+          {
+            id: cible.auteurId,
+            role: cible.auteurRole,
+            managerId: cible.auteurManagerId,
+          },
+          deps.annuaire
+        )
+  if (!peutConsulter(acteur, cible, valideurs)) {
+    throw new NoteIntrouvable('Not found')
   }
   return deps.stockage.getSignedUrl(cible.note.toJSON().receiptKey)
 }

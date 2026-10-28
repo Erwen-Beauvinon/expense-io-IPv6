@@ -8,6 +8,9 @@
 > branche `Ai-ready-ness`.
 > Destination finale : annexe de `docs/propositions-architecture.md`
 > (branche `architecture`).
+> **Numérotation I1–I15 adoptée le 2026-10-26** par le pilote 4a
+> (architecture), responsable du registre : les attributions « inférées »
+> ci-dessous font désormais foi.
 
 ## Comment lire ce registre
 
@@ -51,8 +54,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Sources** : propositions (« objets métier `Montant`, `DateDépense`
   qui refusent les valeurs invalides ») ; audit A, observation
   validation (`Number.parseFloat` accepte `12abc`, aucune borne).
-- **Aujourd'hui** : violé. `Number.parseFloat` + seuls tests
+- **À `265924b`** : violé. `Number.parseFloat` + seuls tests
   `isFinite` et `> 0` (`src/app/api/expense-notes/route.ts:69-73`).
+- **État implémenté (V2)** : tenu. Objet valeur `Montant`
+  (`src/domain/Montant.ts`) : refuse toute saisie non strictement
+  décimale, plus de 2 décimales, ≤ 0 ou au-delà de `MONTANT_MAX` (99 999
+  999,99) → `400 Montant invalide`. Le port `NouvelleNote` exige un
+  `Montant` : un nombre brut ne compile pas. Tests :
+  `tests/unit/domain/saisie.test.ts` ; capacité `numeric(10,2)` prouvée
+  par `tests/integration/montant-capacite.test.ts`.
 - **Garantie cible** : objet métier `Montant` ; refus en `DonnéesInvalides`
   → HTTP 400 (contrat client §5).
 - **Tests** : D — `Montant` refuse `0`, négatif, `NaN`, `12abc`,
@@ -71,8 +81,12 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   une erreur 500 (viole I2) »).
 - **Sources** : propositions, ligne `SoumettreNote` ; audit A, même
   observation.
-- **Aujourd'hui** : violé. Simple contrôle `typeof string`
+- **À `265924b`** : violé. Simple contrôle `typeof string`
   (`route.ts:74`), l'erreur remonte en 500 via `respondError`.
+- **État implémenté (V2)** : tenu. Objet valeur `DateDepense`
+  (`src/domain/DateDepense.ts`), qui reste une chaîne `YYYY-MM-DD` :
+  toute date non calendaire → `400 Date invalide`, jamais 500. Exigé par
+  le port `NouvelleNote`.
 - **Garantie cible** : objet métier `DateDépense`.
 - **Tests** : D — refuse `2026-02-30`, `30/01/2026`, chaîne vide ;
   accepte `2024-02-29`. C — le format renvoyé reste `YYYY-MM-DD`.
@@ -94,9 +108,18 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Sources** : code actuel (`route.ts:71-86` : description non vide,
   types autorisés, `MAX_RECEIPT_BYTES`) ; schéma « architecture
   proposée » (« justificatif obligatoire »).
-- **Aujourd'hui** : tenu pour la création de note, **non tenu** pour la
+- **À `265924b`** : tenu pour la création de note, **non tenu** pour la
   suggestion OCR (aucune limite, voir I-hors-registre en fin de
   document et ticket OCR).
+- **État implémenté (V2)** : tenu. Domaine : objet valeur `Description`
+  (rognée, non vide), `verifierContenantRecu`
+  (`src/domain/Justificatif.ts` : 4 types, 10 Mio) appliqué par la route
+  avant lecture des octets, puis `verifierOctetsRecu` (signature réelle
+  PNG, JPEG, WebP, PDF — revue audit V2, point 8) appliqué par
+  `SoumettreNote` avant tout envoi au stockage. Suggestion :
+  `horsGabaritSuggestion` (images seules, même taille maximale) et la
+  même signature ; hors gabarit ou octets incohérents → `{}`. Messages
+  du contrat client §5.
 - **Garantie cible** : validation portée par `SoumettreNote` et
   `SuggérerChamps` avec les mêmes bornes.
 - **Tests** : A — description blanche refusée ; type MIME hors liste
@@ -113,11 +136,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Statut** : **explicite** (« il reste une note sans justificatif
   (viole I4) »).
 - **Sources** : propositions, ligne `SoumettreNote` ; audit A-F07.
-- **Aujourd'hui** : violé. INSERT avec `receipt_key = ''`, commit,
+- **À `265924b`** : violé. INSERT avec `receipt_key = ''`, commit,
   upload S3, puis UPDATE via `getPool()` hors contexte utilisateur
   (`route.ts:88-106`). Un échec d'upload laisse une note orpheline,
   décidable (`status = 'pending'` par défaut) avant même d'avoir un
   justificatif.
+- **État implémenté (V2)** : tenu. `SoumettreNote` réserve la séquence,
+  envoie le reçu, puis crée la note dans une transaction (`UnitOfWork`)
+  ; un échec de création supprime le reçu en compensation ; sur
+  `EcritureIncertaine`, aucune compensation (reçu conservé, journalisé).
 - **Garantie cible** : envoi du reçu d'abord, puis création de la note
   avec sa clé en une seule transaction (port `UnitOfWork`), ou
   suppression compensatoire prouvée en cas d'échec. Sur COMMIT
@@ -137,9 +164,17 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   confirmé par ADR-DOMAIN-001 (accepté, branche `Ai-ready-ness`).
 - **Sources** : propositions, ligne `TrancherNote` ; ADR-DOMAIN-001 ;
   `ExpenseNote.approve()/reject()` dans `src/domain/ExpenseNote.ts`.
-- **Aujourd'hui** : tenu par les contrôles SQL copiés dans les 4 routes
+- **À `265924b`** : tenu par les contrôles SQL copiés dans les 4 routes
   de décision et le `CHECK` de statut en base, mais l'entité
   `ExpenseNote` n'est jamais utilisée par les routes.
+- **État implémenté (V2)** : tenu à deux niveaux (ADR-DOMAIN-001,
+  amendé). Règle : `ExpenseNote.approve()`/`reject()`, appelées par
+  `TrancherNote` sur la note lue, lèvent `DejaTranchee` (409) sans
+  écriture. Concurrence : l'écriture conditionnelle `status = 'pending'`
+  de `trancherSiEnAttente`. Borne : `CHECK` de statut. Tests :
+  `tests/unit/domain/ExpenseNote.test.ts`,
+  `tests/unit/application/trancher-note.test.ts`,
+  `drill-transition-guard`.
 - **Garantie cible** : transition portée par l'entité du domaine,
   invoquée par le seul cas d'usage `TrancherNote`.
 - **Tests** : D — `approve()` et `reject()` lèvent sur une note déjà
@@ -156,9 +191,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Statut** : **explicite** (« deux décisions simultanées s'écrasent
   (P1, viole I6) »).
 - **Sources** : propositions, ligne `TrancherNote` ; audit A-F08.
-- **Aujourd'hui** : violé. SELECT, test `status !== 'pending'`, puis
+- **À `265924b`** : violé. SELECT, test `status !== 'pending'`, puis
   UPDATE sans prédicat de statut ni verrou, dans les 4 routes : deux
   décisions simultanées peuvent toutes deux « réussir ».
+- **État implémenté (V2)** : tenu. Une seule instruction `UPDATE … WHERE
+  status = 'pending'` écrit statut et traçabilité ; zéro ligne affectée
+  → `409 Already decided`. Preuve de concurrence rejouable : backlog
+  #002.
 - **Garantie cible** : mise à jour conditionnelle
   `UPDATE … WHERE id = $1 AND status = 'pending'` ; zéro ligne
   affectée = `DéjàTranchée`.
@@ -181,11 +220,22 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   (2026-10-21, accepté pour nous le 2026-10-22) qui élargit la règle
   initiale au N+1 et à l'exclusion de soi.
 - **Sources** : propositions (règle `valideurDe`) ; ADR-ARCH-002
-  (branche `architecture`) ; `User.canManage()` dans
-  `src/domain/User.ts` (jamais utilisé par les routes).
-- **Aujourd'hui** : non tenu au-delà du manager direct ; règle non
-  centralisée, non testée ; les policies RLS ne connaissent pas le
-  N+1 et devront être alignées (ADR-DATA-002).
+  (branche `architecture`) ; `calculerValideurs` dans
+  `src/domain/PolitiqueAcces.ts`. L'ancienne entité `User`, qui ne
+  connaissait que le manager direct, a été retirée.
+- **À `265924b`** : non tenu au-delà du manager direct ; règle non
+  centralisée, non testée ; les policies RLS ne connaissaient pas le
+  N+1 (alignées depuis par la migration `0005`, ADR-DATA-002
+  `accepted`).
+- **État implémenté (V2)** : tenu. Référence : `calculerValideurs`
+  (`src/domain/PolitiqueAcces.ts`) — manager direct + N+1, auteur
+  toujours exclu ; `besoinDesRh` et `figureDansLaFile` y vivent aussi.
+  Copies imposées : un seul prédicat SQL (`predicatValideur`, partagé
+  par la décision et la file manager) et les policies RLS de la
+  migration `0005`. Les trois versions sont confrontées à une table de
+  vérité unique (`tests/support/table-valideurs.ts`) : domaine par
+  `tests/unit/domain/table-valideurs.test.ts`, SQL et RLS par
+  `tests/integration/concordance-valideurs.test.ts`.
 - **Tests** : D — table de vérité de `valideursDe` (pluriel) ;
   I — le N+1 voit, consulte et tranche ; un manager d'une autre
   branche ou d'une autre entreprise est refusé ; auto-décision
@@ -204,11 +254,18 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   proposition initiale ne visait que les managers racines).
 - **Sources** : propositions ; schéma « architecture proposée » ;
   ADR-ARCH-002 ; ADR-DATA-001/002 ; audit A-F10.
-- **Aujourd'hui** : **partiellement violé**. Les routes RH filtrent
+- **À `265924b`** : **partiellement violé**. Les routes RH filtrent
   par entreprise, mais les policies RLS
   `expense_notes_hr_root_manager_select/update` ne vérifient pas
   `hr.company_id = u.company_id` et ne couvrent pas les employés sans
   manager : la base seule ne tient pas l'invariant.
+- **État implémenté (V2)** : tenu. RH de la même entreprise pour les
+  auteurs sans manager, les notes de RH (autres RH) et les équipes des
+  managers racines ; égalité d'entreprise dans les policies (migrations
+  `0003`, `0005`). Couvert par la même table de vérité que I7. Depuis la
+  lecture A (ADR-ARCH-002 amendé le 2026-10-26), la file RH liste toutes
+  ces notes : elle est exactement l'ensemble des notes dont le RH est
+  valideur.
 - **Tests** : I — RH de l'entreprise B ne voit ni ne tranche la note
   d'un manager racine de l'entreprise A, **en contournant
   l'applicatif** (requête directe sous contexte RLS) ; employé sans
@@ -225,9 +282,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   (`peutConsulter`).
 - **Sources** : propositions, lignes justificatif et cloisonnement ;
   schéma proposé (« même entreprise (I9, I10) »).
-- **Aujourd'hui** : violé côté manager : la route receipt-url manager
+- **À `265924b`** : violé côté manager : la route receipt-url manager
   ne vérifie ni l'équipe ni l'entreprise (audit A-F04). Tenu ailleurs
   par des filtres recopiés, donc fragile.
+- **État implémenté (V2)** : tenu. `peutConsulter` décide pour la note
+  et son justificatif (`AccederAuJustificatif`, une seule implémentation
+  pour les 3 routes) ; `trouverParId` est borné à l'entreprise. Hors
+  périmètre → `404 Not found` (IDOR fermé).
 - **Garantie cible** : fonction unique `peutConsulter(acteur, note)`,
   utilisée pour la note **et** son justificatif.
 - **Tests** : A/I — matrice acteur × note (auteur, manager direct,
@@ -248,9 +309,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   (« La RLS reste un filet de sécurité (le rôle SQL relève du
   pilote 2) ») ; ADR-DATA-001 ; audit A-F03 (rôle PostgreSQL
   superutilisateur : `FORCE ROW LEVEL SECURITY` inopérant).
-- **Aujourd'hui** : violé. Receipt-url manager et UPDATE post-upload
+- **À `265924b`** : violé. Receipt-url manager et UPDATE post-upload
   de la création passent par `getPool()` ; le rôle applicatif livré
   est superutilisateur, donc la RLS ne protège rien en pratique.
+- **État implémenté (V2)** : tenu. `expense_notes` n'est lue ou écrite
+  que sous `withUserScope` / `UnitOfWork` ; le serveur se connecte avec
+  `expense_app`, non-superutilisateur (ADR-DATA-002 `accepted`,
+  `APP_DATABASE_URL`). `getPool()` hors contexte ne sert plus qu'aux
+  tables sans RLS (`users`, auth, acteur) et à la réservation de
+  séquence.
 - **Garantie cible** : repositories exigeant l'acteur ou l'entreprise
   en signature ; rôle SQL applicatif non-superutilisateur (pilote 2) ;
   `getPool()` réservé aux usages sans donnée d'entreprise (auth).
@@ -271,10 +338,14 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   autre entreprise (viole I11) »).
 - **Sources** : propositions, ligne `RattacherAuManager` ;
   audit A-F05.
-- **Aujourd'hui** : violé. La cible est filtrée par entreprise, mais le
+- **À `265924b`** : violé. La cible est filtrée par entreprise, mais le
   manager choisi est recherché par `id` + rôle seuls, sans
   `company_id` (`src/app/api/hr/users/[id]/manager/route.ts:39-42`) ;
   le commentaire voisin affirme le contraire de ce que fait le code.
+- **État implémenté (V2)** : tenu. Règle explicite du domaine :
+  `verifierManagerEligible` (`src/domain/Hierarchie.ts`) exige la même
+  entreprise que le collaborateur, en plus de la lecture de l'annuaire
+  bornée à l'entreprise → `409 Invalid manager`.
 - **Tests** : A/I — RH de A tente de rattacher son employé à un
   manager de B : refus, rattachement inchangé.
 
@@ -286,8 +357,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   (viole I12) »).
 - **Sources** : propositions, ligne `RattacherAuManager` ; audit A,
   observation mutation RH.
-- **Aujourd'hui** : violé. Seul l'auto-rattachement direct est bloqué
+- **À `265924b`** : violé. Seul l'auto-rattachement direct est bloqué
   (`managerId === id` → 409) ; aucun contrôle transitif.
+- **État implémenté (V2)** : tenu. `RattacherAuManager` lit la chaîne
+  sous verrou consultatif par entreprise (`verrouillerRattachements`),
+  dans la transaction du rattachement ; la règle est la fonction pure
+  `creeraitUnCycle` du domaine → `409 Cycle hiérarchique détecté`. Tests
+  : `tests/unit/domain/hierarchie.test.ts`.
 - **Garantie cible** : domaine Organisation, parcours de la chaîne
   avant écriture, dans la transaction du cas d'usage. Tranché en
   revue phase/6 : verrou consultatif transactionnel par entreprise
@@ -311,8 +387,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Sources** : propositions, ligne `RattacherAuManager`
   (« garantit I11 à I13 ») ; code actuel (`route.ts:32-45`) ;
   audit A, observations.
-- **Aujourd'hui** : partiellement tenu (rôle et auto-rattachement
+- **À `265924b`** : partiellement tenu (rôle et auto-rattachement
   contrôlés), violé sur le corps invalide (voir statut).
+- **État implémenté (V2)** : tenu. Domaine (`Hierarchie`) : cible
+  rattachable (`ROLES_RATTACHABLES`, jamais un RH), pas
+  d'auto-rattachement, rôle `manager` exigé (`409 Invalid manager`) ;
+  corps JSON invalide → `400 Corps invalide`, rattachement inchangé. La
+  console RH et l'annuaire utilisent les mêmes règles.
 - **Tests** : A — désigner un `employee` ou soi-même : refus ;
   corps JSON mal formé : `400`, rattachement inchangé. C — le succès
   conserve la forme utilisateur gelée.
@@ -331,9 +412,18 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **Sources** : propositions, ligne `Inscrire` ; README (comportement
   documenté) ; code actuel `src/app/actions/auth.ts:41-69` (4 requêtes
   séparées, hors transaction).
-- **Aujourd'hui** : règle métier tenue en séquentiel, atomicité
+- **À `265924b`** : règle métier tenue en séquentiel, atomicité
   violée : pas de transaction, course possible entre le contrôle
   d'existence et les insertions.
+- **État implémenté (V2)** : tenu. Règles du domaine
+  (`src/domain/Inscription.ts` : champs, `domaineDe`, `estDomainePublic`
+  — domaines e-mail publics refusés, revue audit V2, point 4 —,
+  `nomEntrepriseDepuisDomaine`, `roleALInscription`) appliquées par
+  `Inscrire` en une transaction ; la contrainte `UNIQUE(email_domain)`
+  arbitre les inscriptions simultanées, et la course sur l'email est
+  traduite par l'adaptateur (le cas d'usage ne connaît plus le code
+  PostgreSQL). Tests : `tests/unit/domain/inscription.test.ts`,
+  `tests/integration/inscrire-db.test.ts`.
 - **Garantie cible** : cas d'usage `Inscrire` sous `UnitOfWork`,
   unicité portée aussi par la contrainte `UNIQUE(email_domain)`.
 - **Tests** : I — inscriptions concurrentes sur un domaine nouveau :
@@ -357,8 +447,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   base »).
 - **Sources** : schéma proposé ; README ; code (aucune route
   d'attribution de rôle).
-- **Aujourd'hui** : tenu, par absence de fonctionnalité — donc sans
+- **À `265924b`** : tenu, par absence de fonctionnalité — donc sans
   test qui le protège d'une régression future.
+- **État implémenté (V2)** : tenu, garanti par le type :
+  `roleALInscription` renvoie un `RoleInscription` (`hr_admin` ou
+  `employee`), exigé par le port `NouvelUtilisateur` — une inscription
+  ne peut pas attribuer `manager`. Aucune route n'écrit `role =
+  'manager'`.
 - **Tests** : A/I — tenter d'obtenir `manager` via inscription et via
   chaque route RH : rôle résultant toujours `employee`/`hr_admin`
   selon I14 ; revue de code : aucune route n'écrit `role = 'manager'`.
@@ -386,13 +481,15 @@ décider à la place du chef de projet :
    et décision sur les notes `pending`. Ne crée pas d'invariant
    nouveau : découle de I7/I8 (valideurs calculés sur le rattachement
    courant) et de I9.
-3. **Notification de l'auteur** après décision : seul le contrat de
-   port est proposé aujourd'hui (événement `NoteTranchée`). Délai,
-   canal et obligation de livraison relèvent d'une décision produit.
-4. **Bornes OCR** (taille, durée, concurrence) : règles du cas d'usage
-   `SuggérerChamps` dans les propositions, mais valeurs non fixées ;
-   la limite de 10 Mio de la création (I3) est le point de départ
-   naturel, à confirmer.
+3. **Notification de l'auteur** après décision : `TrancherNote` publie
+   l'événement `NoteTranchee` après le commit, vers un adaptateur
+   console ; un échec d'envoi ne fait jamais échouer la décision.
+   Délai, canal et obligation de livraison relèvent toujours d'une
+   décision produit.
+4. **Bornes OCR** : fixées le 2026-10-19 (contrats des ports §11) et
+   implémentées dans `SuggererChamps` — images seules (png, jpeg,
+   webp), 10 Mio maximum, délai de 15 s avec annulation réelle,
+   plafond de concurrence dans l'adaptateur ; hors borne → `{}`.
 
 ## Matrice de couverture visée
 

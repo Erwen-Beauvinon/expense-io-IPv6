@@ -1,20 +1,14 @@
 import { lireRaison, toExpenseNoteView } from '@/lib/serialisation'
 import { trancherNote } from '@/application/TrancherNote'
-import { resolveActeur } from '@/lib/actor'
+import { ouvrirEspace, ESPACE_RH } from '@/app/api/_partage/espace'
 import { auth } from '@/lib/auth'
 import { getAnnuaire, getNotes, getNotificateur } from '@/lib/container'
 import { respondError } from '@/lib/errors'
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await auth()
-    if (!session?.user || session.user.role !== 'hr_admin') {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-    const acteur = await resolveActeur(session)
-    if (!acteur) {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
+    const acteur = await ouvrirEspace(await auth(), ESPACE_RH)
+    if (acteur instanceof Response) return acteur
     const { id } = await params
     // Motif obligatoire au rejet (ADR-DOMAIN-002, dérogation
     // ADR-ARCH-003) : absent ou invalide → 400, rien n'est écrit.
