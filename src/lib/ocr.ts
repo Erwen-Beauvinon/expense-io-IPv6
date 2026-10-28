@@ -124,6 +124,14 @@ export async function suggestFields(
       cacheMethod: 'none',
     })
     try {
+      // Abandon pendant l'initialisation (revues croisées du
+      // 2026-10-28) : l'événement abort est déjà passé quand le
+      // worker arrive, l'écouteur posé plus bas ne le verrait jamais
+      // et la reconnaissance démarrerait malgré l'expiration du
+      // délai. On revérifie le signal dès la résolution, dans le try
+      // dont le finally termine le worker : pas de recognize, mais
+      // un terminate.
+      if (options.signal?.aborted) return {}
       // Annulation réelle (revue phase/5 §2) : à l'abandon, le worker
       // est terminé au lieu de tourner en tâche de fond après le délai.
       const abandon = new Promise<never>((_, rejeter) => {
