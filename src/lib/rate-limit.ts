@@ -79,8 +79,7 @@ export type Limiteur = ReturnType<typeof creerLimiteur>
 // confiance déclaré (TRUSTED_PROXY=true), et on prend alors la
 // DERNIÈRE entrée — celle ajoutée par le proxy le plus proche, pas
 // celle inventée par le client. Sans proxy de confiance, aucun
-// en-tête n'est fiable : seau partagé `inconnue` (fail-closed, le
-// seau par compte reste la protection principale).
+// en-tête n'est fiable : l'IP est `inconnue`.
 export function ipCliente(entetes: Headers): string {
   if (process.env.TRUSTED_PROXY === 'true') {
     const chaine = entetes.get('x-forwarded-for')
@@ -90,6 +89,23 @@ export function ipCliente(entetes: Headers): string {
     if (reelle) return reelle
   }
   return 'inconnue'
+}
+
+// Clés de limitation d'une tentative d'authentification : seau par
+// compte visé, toujours, et seau par IP seulement si elle est connue.
+// Un seau IP partagé sur `inconnue` verrouillerait tout le monde
+// après quelques échecs de n'importe qui (revues croisées du
+// 2026-10-28) : sans proxy de confiance, la protection repose sur le
+// seul seau par compte — d'où l'intérêt de déclarer TRUSTED_PROXY
+// derrière un vrai proxy.
+export function clesLimite(action: string, email: unknown, ip: string): string[] {
+  const compte =
+    typeof email === 'string' && email.includes('@')
+      ? email.trim().toLowerCase()
+      : 'sans-compte'
+  const cles = [`${action}:compte:${compte}`]
+  if (ip !== 'inconnue') cles.push(`${action}:ip:${ip}`)
+  return cles
 }
 
 // 10 échecs par tranche de 10 minutes, pour login et signup. Assez

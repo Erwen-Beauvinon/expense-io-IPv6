@@ -20,6 +20,13 @@ const limiteurCallback = creerLimiteur({
 
 function limiterCallbackReponse(req: Request): NextResponse | null {
   const ip = ipCliente(req.headers)
+  // IP inconnue (pas de proxy de confiance déclaré) : aucun seau
+  // fiable à appliquer ici — un seau partagé `inconnue` bloquerait
+  // tous les clients après 30 tentatives (revues croisées du
+  // 2026-10-28). La protection repose alors sur le coût bcrypt et,
+  // via les Server Actions, le seau par compte. Déclarer
+  // TRUSTED_PROXY=true derrière un vrai proxy réactive ce limiteur.
+  if (ip === 'inconnue') return null
   if (!limiteurCallback.autorise(`auth-callback:ip:${ip}`)) {
     return NextResponse.json({ error: MESSAGE_TROP_DE_TENTATIVES }, { status: 429 })
   }

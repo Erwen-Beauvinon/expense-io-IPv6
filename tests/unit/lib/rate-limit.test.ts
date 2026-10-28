@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { creerLimiteur, ipCliente } from '@/lib/rate-limit'
+import { clesLimite, creerLimiteur, ipCliente } from '@/lib/rate-limit'
 
 describe('limiteur anti-brute-force', () => {
   it('autorise jusqu’au quota d’échecs puis refuse, par clé indépendante', () => {
@@ -60,6 +60,30 @@ describe('limiteur anti-brute-force', () => {
     // Le balayage a purgé toutes les fenêtres expirées.
     expect(limiteur.compter('login:ip:10.0.0.0')).toBe(0)
     expect(limiteur.compter('login:ip:10.0.0.49')).toBe(0)
+  })
+})
+
+describe('clesLimite (revues croisées du 2026-10-28)', () => {
+  it('IP inconnue : seul le seau par compte, aucun seau global partagé', () => {
+    expect(clesLimite('login', 'Alice@Acme.io', 'inconnue')).toEqual([
+      'login:compte:alice@acme.io',
+    ])
+    // Deux clients distincts sans IP connue ne partagent donc aucune
+    // clé : les échecs de l'un ne peuvent pas bloquer l'autre.
+    const a = clesLimite('login', 'a@acme.io', 'inconnue')
+    const b = clesLimite('login', 'b@acme.io', 'inconnue')
+    expect(a.filter((cle) => b.includes(cle))).toEqual([])
+  })
+
+  it('IP connue : seaux compte et IP', () => {
+    expect(clesLimite('signup', 'a@acme.io', '198.51.100.2')).toEqual([
+      'signup:compte:a@acme.io',
+      'signup:ip:198.51.100.2',
+    ])
+  })
+
+  it('email invalide : seau sans-compte, jamais de seau global', () => {
+    expect(clesLimite('login', null, 'inconnue')).toEqual(['login:compte:sans-compte'])
   })
 })
 

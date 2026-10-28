@@ -8,6 +8,7 @@ import { DonneesInvalides } from '@/domain/errors'
 import { getAnnuaire, getUnitOfWork } from '@/lib/container'
 import {
   MESSAGE_TROP_DE_TENTATIVES,
+  clesLimite as construireClesLimite,
   ipCliente,
   limiteurAuth,
 } from '@/lib/rate-limit'
@@ -17,21 +18,16 @@ export interface AuthFormState {
   error?: string
 }
 
-// Clés de limitation (revue phase/8 §4) : seau par IP appelante ET seau
-// par compte visé — un réseau partagé ne se verrouille pas mutuellement
-// (comptes distincts) et forger l'en-tête IP ne contourne pas le seau
-// compte. Extraction d'IP : voir `ipCliente` (revue V2, point 3 —
-// dernière entrée x-forwarded-for, uniquement derrière un proxy de
-// confiance déclaré). Login : seuls les échecs sont comptés ;
+// Clés de limitation (revue phase/8 §4) : seau par compte visé et,
+// si l'IP est connue, seau par IP — un réseau partagé ne se verrouille
+// pas mutuellement (comptes distincts) et forger l'en-tête IP ne
+// contourne pas le seau compte. Construction : `clesLimite` dans
+// rate-limit (pas de seau IP global sur IP inconnue, revues croisées
+// du 2026-10-28). Login : seuls les échecs sont comptés ;
 // inscription : chaque tentative est comptée, succès compris.
 async function clesLimite(action: string, email: unknown): Promise<string[]> {
   const entetes = await headers()
-  const ip = ipCliente(entetes)
-  const compte =
-    typeof email === 'string' && email.includes('@')
-      ? email.trim().toLowerCase()
-      : 'sans-compte'
-  return [`${action}:ip:${ip}`, `${action}:compte:${compte}`]
+  return construireClesLimite(action, email, ipCliente(entetes))
 }
 
 function quotaEpuise(cles: string[]): string[] {
