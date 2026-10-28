@@ -112,11 +112,14 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   suggestion OCR (aucune limite, voir I-hors-registre en fin de
   document et ticket OCR).
 - **État implémenté (V2)** : tenu. Domaine : objet valeur `Description`
-  (rognée, non vide) et `verifierContenantRecu`
-  (`src/domain/Justificatif.ts` : 4 types, 10 Mio), appliqués par la
-  route avant lecture des octets puis par `SoumettreNote`. Suggestion :
-  `horsGabaritSuggestion` (images seules, même taille maximale), hors
-  gabarit → `{}`. Messages du contrat client §5.
+  (rognée, non vide), `verifierContenantRecu`
+  (`src/domain/Justificatif.ts` : 4 types, 10 Mio) appliqué par la route
+  avant lecture des octets, puis `verifierOctetsRecu` (signature réelle
+  PNG, JPEG, WebP, PDF — revue audit V2, point 8) appliqué par
+  `SoumettreNote` avant tout envoi au stockage. Suggestion :
+  `horsGabaritSuggestion` (images seules, même taille maximale) et la
+  même signature ; hors gabarit ou octets incohérents → `{}`. Messages
+  du contrat client §5.
 - **Garantie cible** : validation portée par `SoumettreNote` et
   `SuggérerChamps` avec les mêmes bornes.
 - **Tests** : A — description blanche refusée ; type MIME hors liste
@@ -413,7 +416,8 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   violée : pas de transaction, course possible entre le contrôle
   d'existence et les insertions.
 - **État implémenté (V2)** : tenu. Règles du domaine
-  (`src/domain/Inscription.ts` : champs, `domaineDe`,
+  (`src/domain/Inscription.ts` : champs, `domaineDe`, `estDomainePublic`
+  — domaines e-mail publics refusés, revue audit V2, point 4 —,
   `nomEntrepriseDepuisDomaine`, `roleALInscription`) appliquées par
   `Inscrire` en une transaction ; la contrainte `UNIQUE(email_domain)`
   arbitre les inscriptions simultanées, et la course sur l'email est
