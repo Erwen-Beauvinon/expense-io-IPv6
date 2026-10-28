@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import {
   MESSAGE_TROP_DE_TENTATIVES,
+  cleCallback,
   creerLimiteur,
   ipCliente,
 } from '@/lib/rate-limit'
@@ -20,17 +21,18 @@ const limiteurCallback = creerLimiteur({
 
 function limiterCallbackReponse(req: Request): NextResponse | null {
   const ip = ipCliente(req.headers)
-  // IP inconnue (pas de proxy de confiance déclaré) : aucun seau
-  // fiable à appliquer ici — un seau partagé `inconnue` bloquerait
-  // tous les clients après 30 tentatives (revues croisées du
-  // 2026-10-28). La protection repose alors sur le coût bcrypt et,
-  // via les Server Actions, le seau par compte. Déclarer
-  // TRUSTED_PROXY=true derrière un vrai proxy réactive ce limiteur.
-  if (ip === 'inconnue') return null
-  if (!limiteurCallback.autorise(`auth-callback:ip:${ip}`)) {
+  // IP inconnue : le seau partagé `inconnue` est conservé ICI, sur
+  // le seul endpoint direct. Les connexions normales passent par la
+  // Server Action `signIn` (appel serveur, sans requête HTTP vers ce
+  // callback) : ce seau ne peut donc pas bloquer les utilisateurs du
+  // formulaire, seulement les appels directs — scripts ou attaquant
+  // qui contourneraient sinon tout quota, celui par compte compris
+  // (contre-revues du 2026-10-28). Sans lui, le brute-force direct
+  // ne serait freiné que par le coût bcrypt.
+  if (!limiteurCallback.autorise(cleCallback(ip))) {
     return NextResponse.json({ error: MESSAGE_TROP_DE_TENTATIVES }, { status: 429 })
   }
-  limiteurCallback.signalerEchec(`auth-callback:ip:${ip}`)
+  limiteurCallback.signalerEchec(cleCallback(ip))
   return null
 }
 

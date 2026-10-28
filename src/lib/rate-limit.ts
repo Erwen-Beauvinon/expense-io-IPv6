@@ -108,6 +108,14 @@ export function clesLimite(action: string, email: unknown, ip: string): string[]
   return cles
 }
 
+// Clé du limiteur de l'endpoint Auth.js direct (proxy.ts). Ici le
+// seau est par IP telle quelle, `inconnue` comprise : cet endpoint
+// n'est pas traversé par les connexions du formulaire (Server
+// Action), un seau partagé n'y bloque donc que les appels directs.
+export function cleCallback(ip: string): string {
+  return `auth-callback:ip:${ip}`
+}
+
 // 10 échecs par tranche de 10 minutes, pour login et signup. Assez
 // large pour un usage légitime (erreurs de frappe), assez étroit pour
 // rendre le brute-force impraticable. Voir aussi le middleware

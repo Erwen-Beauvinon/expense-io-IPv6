@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { clesLimite, creerLimiteur, ipCliente } from '@/lib/rate-limit'
+import { cleCallback, clesLimite, creerLimiteur, ipCliente } from '@/lib/rate-limit'
 
 describe('limiteur anti-brute-force', () => {
   it('autorise jusqu’au quota d’échecs puis refuse, par clé indépendante', () => {
@@ -84,6 +84,19 @@ describe('clesLimite (revues croisées du 2026-10-28)', () => {
 
   it('email invalide : seau sans-compte, jamais de seau global', () => {
     expect(clesLimite('login', null, 'inconnue')).toEqual(['login:compte:sans-compte'])
+  })
+
+  it('callback direct : le seau partagé inconnue est conservé, lui seul', () => {
+    // Contre-revues du 2026-10-28 : sans ce seau, l'endpoint Auth.js
+    // direct n'a aucune limite quand l'IP est inconnue. Les clés des
+    // Server Actions (ci-dessus) et du callback restent distinctes.
+    expect(cleCallback('inconnue')).toBe('auth-callback:ip:inconnue')
+    expect(cleCallback('198.51.100.2')).toBe('auth-callback:ip:198.51.100.2')
+    const limiteur = creerLimiteur({ fenetreMs: 60_000, maxEssais: 2 })
+    limiteur.signalerEchec(cleCallback('inconnue'))
+    limiteur.signalerEchec(cleCallback('inconnue'))
+    expect(limiteur.autorise(cleCallback('inconnue'))).toBe(false)
+    expect(limiteur.autorise('login:compte:a@acme.io')).toBe(true)
   })
 })
 
