@@ -1,0 +1,22 @@
+# Expense.io
+
+> Application de gestion de notes de frais : Next.js 16 (App Router), PostgreSQL avec Row Level Security, stockage des reçus sur S3 (LocalStack en local), OCR Tesseract. Rôles employé, manager, RH. Les règles vérifiables sont appliquées par des outils ; la documentation ne décrit que ce qu'ils ne vérifient pas.
+
+## Docs
+
+- [README](README.md): démarrage, comptes de démonstration, commandes
+- [AGENTS.md](AGENTS.md): commandes, contraintes non évidentes, preuves de fin de tâche
+- [Architecture](docs/architecture.md): carte du code, couches, parcours d'une requête, couverture de la vérification
+- [CONTRIBUTING.md](CONTRIBUTING.md): workflow et ajout d'une règle vérifiable
+- [Backlog](docs/backlog.md): écarts de vérification connus
+
+## Décisions
+
+- [ADR-ARCH-001](docs/adr/ADR-ARCH-001-layer-boundaries.md): frontières de couches appliquées par ESLint, démontrées par drills
+- [ADR-DOMAIN-001](docs/adr/ADR-DOMAIN-001-expense-note-lifecycle.md): une note est tranchée une seule fois (pending → approved | rejected)
+- [ADR-DATA-001](docs/adr/ADR-DATA-001-row-level-security.md): isolation des notes par RLS PostgreSQL via withUserScope
+
+## Optional
+
+- [Schéma SQL](migrations/1700000000001_init-schema.sql): tables et policies RLS
+- [Gabarit ai-ready-repo](https://github.com/vidanov/ai-ready-repo): origine de cette structure

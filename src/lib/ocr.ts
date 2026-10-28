@@ -104,15 +104,19 @@ function parseExpenseDate(text: string): string | undefined {
 }
 
 // Pas de limite de taille de fichier ici (contrairement à la création d'une
-// note de frais) : un gros fichier peut monopoliser le worker un long
-// moment avant de renvoyer une suggestion vide.
-export async function suggestFields(receipt: {
-  data: Buffer
-  mimeType: string
-}): Promise<ExpenseNoteSuggestion> {
+// note de frais) : la borne vit dans le cas d'usage SuggererChamps, qui
+// refuse le hors-gabarit avant d'appeler le moteur (revue phase/5 §1).
+export async function suggestFields(
+  receipt: {
+    data: Buffer
+    mimeType: string
+  },
+  options: { signal?: AbortSignal } = {}
+): Promise<ExpenseNoteSuggestion> {
   if (!SUPPORTED_MIME_TYPES.includes(receipt.mimeType)) {
     return {}
   }
+  if (options.signal?.aborted) return {}
 
   try {
     const worker = await createWorker('fra', undefined, {
@@ -120,14 +124,31 @@ export async function suggestFields(receipt: {
       cacheMethod: 'none',
     })
     try {
+      // Abandon pendant l'initialisation (revues croisées du
+      // 2026-10-28) : l'événement abort est déjà passé quand le
+      // worker arrive, l'écouteur posé plus bas ne le verrait jamais
+      // et la reconnaissance démarrerait malgré l'expiration du
+      // délai. On revérifie le signal dès la résolution, dans le try
+      // dont le finally termine le worker : pas de recognize, mais
+      // un terminate.
+      if (options.signal?.aborted) return {}
+      // Annulation réelle (revue phase/5 §2) : à l'abandon, le worker
+      // est terminé au lieu de tourner en tâche de fond après le délai.
+      const abandon = new Promise<never>((_, rejeter) => {
+        options.signal?.addEventListener('abort', () => rejeter(options.signal?.reason), {
+          once: true,
+        })
+      })
       const {
         data: { text },
-      } = await worker.recognize(receipt.data)
+      } = await Promise.race([worker.recognize(receipt.data), abandon])
       return { amount: parseAmount(text), expenseDate: parseExpenseDate(text) }
     } finally {
       await worker.terminate()
     }
   } catch (error) {
+    // Abandon volontaire : suggestion vide, sans log d'erreur.
+    if (options.signal?.aborted) return {}
     console.error('[ocr] Extraction échouée, suggestion vide renvoyée', error)
     return {}
   }

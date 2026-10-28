@@ -11,6 +11,25 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 loadEnv({ quiet: true })
 
+// Garde d'environnement (revue V2, point 6) : ce script pose un mot de
+// passe de rôle connu et crée des comptes aux mots de passe publics.
+// Lancé par erreur contre une base de production, il ouvrirait une
+// porte d'entrée. Refusé hors développement local.
+if (process.env.NODE_ENV === 'production') {
+  console.error('Seed refusé : NODE_ENV=production (script de développement uniquement).')
+  process.exit(1)
+}
+const hoteBase = /@(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?\//.test(
+  process.env.DATABASE_URL ?? ''
+)
+if (!hoteBase) {
+  console.error(
+    'Seed refusé : DATABASE_URL ne vise pas un hôte local (localhost/127.0.0.1). ' +
+      'Ce script crée des comptes aux mots de passe connus, réservés au développement.'
+  )
+  process.exit(1)
+}
+
 const hrEmail = process.env.SEED_HR_EMAIL ?? 'hr@expense.io'
 const hrPassword = process.env.SEED_HR_PASSWORD ?? 'hr1234'
 const managerEmail = process.env.SEED_MANAGER_EMAIL ?? 'manager@expense.io'
@@ -23,6 +42,13 @@ if (!domain) {
 }
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+
+// Mot de passe du rôle applicatif, posé hors migration (revue
+// phase/8 §3) : développement uniquement — la production utilise un
+// secret dédié. Idempotent et inoffensif si déjà posé.
+await pool.query(
+  `ALTER ROLE expense_app WITH LOGIN PASSWORD 'expense_app_dev_only'`
+)
 
 // Un PNG 1x1 valide (pas juste des octets arbitraires) : "voir le reçu"
 // affiche une vraie image dans le navigateur plutôt qu'un fichier corrompu.

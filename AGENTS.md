@@ -1,0 +1,107 @@
+# Guide pour agents
+
+Expense.io : gestion de notes de frais (Next.js 16 App Router, PostgreSQL avec
+RLS, stockage S3 via LocalStack, OCR Tesseract). Architecture détaillée dans
+[docs/architecture.md](docs/architecture.md), workflow dans [CONTRIBUTING.md](CONTRIBUTING.md).
+Ce fichier ne contient que ce que les outils ne vérifient pas eux-mêmes.
+
+## Dépôt de travail : toujours le fork
+
+On travaille **uniquement** sur le fork
+[`Erwen-Beauvinon/expense-io-IPv6`](https://github.com/Erwen-Beauvinon/expense-io-IPv6),
+jamais sur le dépôt amont `NathanPrats/expense-io` ni sur un autre dépôt.
+
+- Branches, pushs et PR : sur le fork uniquement. Une PR cible une branche du
+  fork : `gh pr create --repo Erwen-Beauvinon/expense-io-IPv6`
+  (sans `--repo`, `gh` propose l'amont par défaut).
+- Ne jamais ajouter de remote vers l'amont pour y pousser, ni ouvrir d'issue,
+  de PR ou de commentaire sur l'amont.
+- Le hook `.githooks/pre-push` refuse tout push hors du fork
+  (`make drill-fork-guard`). Ne pas le contourner (`--no-verify`) ni le modifier.
+
+## Commandes
+
+| Tâche | Commande |
+|---|---|
+| Installer (lockfile, hooks) | `make bootstrap` |
+| Lancer l'app (Docker + migrations + seed + dev) | `make dev` |
+| Vérification rapide : lint, frontières, types | `make verify-fast` |
+| Vérification complète (sans Docker) | `make verify` |
+| Définition de « terminé » | `make verify-all` (verify + tous les drills) |
+| Tests unitaires / un seul test | `make test` / `npx vitest run tests/unit/domain -t "nom"` |
+| Format des ADR | `make validate-adrs` |
+| Tests E2E (Docker requis) / un seul fichier | `make test-e2e` / `npx playwright test tests/e2e/manager.spec.ts` |
+| Tests d'intégration (Docker, migrations et seed requis) | `RUN_INTEGRATION=1 npx vitest run tests/integration` |
+| Contrat client (golden ; seed frais, serveur sur 3100) | `make golden` |
+
+`make verify` ne démarre ni PostgreSQL ni LocalStack : les tests
+d'intégration s'y ignorent d'eux-mêmes sans `RUN_INTEGRATION=1`. Le job CI
+`e2e` exécute tout ce qui demande Docker, dans cet ordre : golden sur le
+seed intact (le golden écrit), E2E, puis intégration sous le rôle
+applicatif `expense_app`.
+
+| Couche | Ce qui est prouvé | Où |
+|---|---|---|
+| Domaine et cas d'usage | Règles, autorisations, 409/404, ports en mémoire | `tests/unit/` |
+| PostgreSQL | RLS sur deux entreprises sous `expense_app`, inscription | `tests/integration/` |
+| HTTP | Contrat client C01–C11 (statuts et corps) | `tests/contract/` + `make golden` |
+| Interface | Parcours employé, manager, RH, inscription | `tests/e2e/` |
+
+Non prouvé à ce jour (voir [backlog](docs/backlog.md) #001 et #002) : accès
+croisés directs à l'API au niveau HTTP, et deux décisions simultanées sur
+une vraie base (la garde 409 n'est testée qu'en unitaire).
+
+Les E2E figent le comportement **actuel** visible par l'utilisateur. Si une
+refonte en casse un, c'est une régression tant qu'aucun ADR n'a acté le
+changement de comportement. Ne jamais modifier un test E2E pour qu'il passe
+dans la même PR qu'une refonte censée ne rien changer.
+
+## Ordre de travail
+
+1. Lire l'ADR concerné avant de toucher à une frontière de couche, au statut
+   d'une note ou à l'accès base. Les raisons ne se déduisent pas du lint.
+2. `make verify-fast` pendant l'édition ; `make verify-all` avant de conclure.
+   Ajouter un test (ou un drill) pour tout comportement modifié.
+3. Rapporter les preuves de fin de tâche ci-dessous.
+
+## Contraintes non évidentes
+
+- **Couches** : `domain` et `utils` sont purs ; `components` (client) n'importe
+  jamais `@/lib` ni `@/adapters`. Appliqué par ESLint
+  ([ADR-ARCH-001](docs/adr/ADR-ARCH-001-layer-boundaries.md)) : ne pas affaiblir
+  `eslint.config.mjs` pour faire passer une violation.
+- **Statut d'une note** : `pending` → `approved` | `rejected`, une seule fois.
+  Toute route de décision renvoie 409 si la note n'est plus `pending`
+  ([ADR-DOMAIN-001](docs/adr/ADR-DOMAIN-001-expense-note-lifecycle.md)).
+- **Accès à `expense_notes`** : passer par `withUserScope(userId, fn)` et le
+  `client` qu'il fournit, pour que la RLS s'applique. `getPool()` n'a pas de
+  contexte utilisateur ([ADR-DATA-001](docs/adr/ADR-DATA-001-row-level-security.md)).
+  `users` et `companies` n'ont pas de RLS : filtrer par `company_id` à la main.
+- **Les routes `/api` ne sont pas protégées par `src/proxy.ts`** (le matcher
+  les exclut). Chaque handler vérifie lui-même `auth()` et `session.user.role`.
+- Le rôle est copié dans le JWT à la connexion : un changement de rôle en base
+  n'est visible qu'après reconnexion.
+- Le rôle `manager` n'est jamais attribuable depuis l'interface (seed ou SQL).
+  Le premier inscrit d'un domaine email devient `hr_admin` de son entreprise.
+- Les colonnes `date` restent des chaînes `YYYY-MM-DD` (parser OID 1082 dans
+  `src/lib/db.ts`) : ne pas les convertir en `Date` côté serveur.
+- Migrations : fichiers SQL `migrations/<timestamp>_<nom>.sql` avec sections
+  `-- Up Migration` / `-- Down Migration`. Ne jamais modifier une migration
+  déjà appliquée ; en ajouter une nouvelle.
+- Ports locaux : PostgreSQL `5433`, LocalStack `4567` (pas les ports par défaut).
+
+## Zones à valider avant modification
+
+- `migrations/`, `src/lib/db.ts` : schéma et isolation des données.
+- `src/lib/auth.ts`, `src/proxy.ts` : authentification et sessions.
+- `.github/workflows/`, `eslint.config.mjs`, `docs/adr/`, `.githooks/` : règles de vérification.
+
+L'autorisation de la tâche en cours s'applique toujours. CODEOWNERS contient
+des équipes fictives : sa présence ne prouve aucune revue obligatoire.
+
+## Preuves de fin de tâche
+
+1. `make verify-all` passe (verify seul ne lance aucun drill).
+2. Lister chaque commande lancée et son code de sortie.
+3. Lister les fichiers modifiés.
+4. Dire ce qui n'a pas pu être vérifié en local (routes, RLS, S3, OCR).

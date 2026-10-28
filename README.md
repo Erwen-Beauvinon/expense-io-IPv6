@@ -62,3 +62,21 @@ make typecheck
 make down    # arrête Postgres/LocalStack
 make clean   # arrête et supprime les données locales
 ```
+
+## Vérification et contribution (humains et agents IA)
+
+> On travaille toujours sur le fork `Erwen-Beauvinon/expense-io-IPv6`, jamais sur
+> l'amont `NathanPrats/expense-io` : le hook `pre-push` refuse toute autre destination.
+
+```bash
+make bootstrap     # npm ci (lockfile), .env, hooks git versionnés
+make verify-fast   # lint + frontières de couches + types
+make verify        # + tests unitaires (Vitest) + format des ADR — sans Docker
+make verify-all    # + drills : chaque garde doit rejeter une violation plantée
+```
+
+- [AGENTS.md](AGENTS.md) : commandes, contraintes non évidentes, preuves de fin de tâche
+  (`CLAUDE.md` et `.cursor/rules/` y renvoient).
+- [docs/architecture.md](docs/architecture.md) : carte du code et couverture de la vérification.
+- [docs/adr/](docs/adr/) : décisions vérifiables ; [docs/backlog.md](docs/backlog.md) : écarts connus.
+- [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md).

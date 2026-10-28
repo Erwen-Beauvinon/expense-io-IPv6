@@ -1,0 +1,14 @@
+---
+description: Règles pour le code applicatif TypeScript
+globs: src/**/*.ts,src/**/*.tsx
+alwaysApply: false
+---
+
+# Code source
+
+Lire `AGENTS.md` pour les contraintes complètes.
+
+- Frontières de couches appliquées par ESLint (ADR-ARCH-001) : `domain` et
+  `utils` purs, `components` n'importe ni `@/lib` ni `@/adapters`.
+  Vérifier : `make lint`. Ne pas affaiblir `eslint.config.mjs`.
+- Après modification : `make verify-fast`, puis `make verify-all` avant de conclure.

@@ -37,3 +37,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# tests
+/coverage
+
+# Playwright
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
+
+# Golden (capture locale / CI)
+/golden.live.json
+/golden-server.log

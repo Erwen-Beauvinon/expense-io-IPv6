@@ -3,9 +3,24 @@ import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { getPool } from '@/lib/db'
 
-// Généré une fois pour ce projet — pas besoin de le régénérer à chaque
-// déploiement.
-const AUTH_SECRET = 'e29f9c3b6a1d4e7f8021c5b6d4a9f0e3c7b8a2d1f6e5c4b3a2918273645fabcd'
+// Le secret JWT ne doit jamais être versionné : il est lu depuis
+// l'environnement et son absence bloque le démarrage, avec un message
+// explicite plutôt qu'une session signée par une valeur par défaut.
+// Échec fermé (revues phase/1) : la valeur d'exemple `changeme-…`
+// (copiée par `make env` si inchangée) et les valeurs trop courtes
+// sont refusées — un secret public permet la forge de session.
+const AUTH_SECRET = process.env.AUTH_SECRET
+if (!AUTH_SECRET) {
+  throw new Error(
+    "AUTH_SECRET is not set. Génère-le (`npx auth secret`) ou lance `make env`."
+  )
+}
+if (AUTH_SECRET.startsWith('changeme') || AUTH_SECRET.length < 32) {
+  throw new Error(
+    'AUTH_SECRET refusé (valeur d’exemple ou moins de 32 caractères) : ' +
+      'il permettrait la forge de session. Génère-le (`npx auth secret`).'
+  )
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: AUTH_SECRET,
@@ -25,12 +40,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof credentials?.password === 'string' ? credentials.password : null
         if (!email || !password) return null
 
+        // Seule voie d'accès à password_hash (migration 0006) : le
+        // rôle applicatif n'a plus SELECT sur cette colonne.
         const result = await getPool().query<{
           id: string
           email: string
           password_hash: string
           role: 'employee' | 'manager' | 'hr_admin'
-        }>('SELECT id, email, password_hash, role FROM users WHERE email = $1', [email])
+        }>(
+          'SELECT id, email, password_hash, role FROM authentifier_par_email($1)',
+          [email]
+        )
         const user = result.rows[0]
         if (!user) return null
 

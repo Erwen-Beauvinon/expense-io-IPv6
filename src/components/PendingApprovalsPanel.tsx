@@ -23,6 +23,10 @@ export function PendingApprovalsPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [decidingId, setDecidingId] = useState<string | null>(null)
+  // Rejet en cours (revues phase/4, ADR-ARCH-003) : le motif est saisi
+  // dans la ligne avant l'envoi — aucun rejet sans motif possible.
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [motifs, setMotifs] = useState<Record<string, string>>({})
 
   const loadPending = useCallback(async () => {
     const response = await fetch('/api/manager/expense-notes')
@@ -50,13 +54,23 @@ export function PendingApprovalsPanel() {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  async function handleDecide(id: string, decision: 'approve' | 'reject') {
+  async function handleDecide(id: string, decision: 'approve' | 'reject', reason?: string) {
     setDecidingId(id)
     setError(null)
     const response = await fetch(`/api/manager/expense-notes/${id}/${decision}`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: reason === undefined ? undefined : JSON.stringify({ reason }),
     })
     setDecidingId(null)
+    if (decision === 'reject') {
+      setRejectingId(null)
+      setMotifs((precedents) => {
+        const suivants = { ...precedents }
+        delete suivants[id]
+        return suivants
+      })
+    }
 
     if (response.ok) {
       await loadPending()
@@ -139,14 +153,60 @@ export function PendingApprovalsPanel() {
                       >
                         Approuver
                       </button>
-                      <button
-                        type="button"
-                        disabled={decidingId === note.id}
-                        onClick={() => handleDecide(note.id, 'reject')}
-                        className="text-sm font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Rejeter
-                      </button>
+                      {rejectingId === note.id ? (
+                        <span className="inline-flex flex-col items-end gap-2">
+                          <label
+                            htmlFor={`motif-rejet-${note.id}`}
+                            className="text-xs text-gray-500 dark:text-gray-400"
+                          >
+                            Motif du rejet (obligatoire, 500 caractères maximum)
+                          </label>
+                          <textarea
+                            id={`motif-rejet-${note.id}`}
+                            rows={2}
+                            maxLength={500}
+                            value={motifs[note.id] ?? ''}
+                            onChange={(event) =>
+                              setMotifs((precedents) => ({
+                                ...precedents,
+                                [note.id]: event.target.value,
+                              }))
+                            }
+                            className="w-64 rounded-md border border-gray-300 px-2 py-1 text-sm text-left dark:border-gray-700 dark:bg-gray-800"
+                          />
+                          <span className="inline-flex gap-3">
+                            <button
+                              type="button"
+                              disabled={
+                                decidingId === note.id ||
+                                (motifs[note.id] ?? '').trim().length === 0
+                              }
+                              onClick={() =>
+                                handleDecide(note.id, 'reject', motifs[note.id]?.trim())
+                              }
+                              className="text-sm font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Confirmer le rejet
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRejectingId(null)}
+                              className="text-sm text-gray-500 hover:underline dark:text-gray-400"
+                            >
+                              Annuler
+                            </button>
+                          </span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={decidingId === note.id}
+                          onClick={() => setRejectingId(note.id)}
+                          className="text-sm font-medium text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Rejeter
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

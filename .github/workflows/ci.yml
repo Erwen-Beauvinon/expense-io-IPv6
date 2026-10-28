@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main, V2]
+  pull_request:
+    branches: [main, V2]
+
+# Les deux jobs ne font que lire le dépôt : jeton en lecture seule.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (lockfile)
+        run: npm ci
+
+      # F4 : aucune vulnérabilité connue ne doit réapparaître en silence
+      # (revue V2, point 1) — prod et dev, seuil moderate comme la
+      # dependency-review.
+      - name: Audit des dépendances
+        run: npm audit --audit-level=moderate
+
+      - name: Verify (lint + frontières, types, tests unitaires, ADR)
+        run: make verify
+
+  drills:
+    name: Drills
+    runs-on: ubuntu-latest
+    # Un step par drill : un échec nomme le drill cassé. `make drills` refuse
+    # de passer si un drill du Makefile n'apparaît pas ici.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (lockfile)
+        run: npm ci
+
+      - name: drill-boundaries-deny
+        run: make drill-boundaries-deny
+
+      - name: drill-boundaries-permit
+        run: make drill-boundaries-permit
+
+      - name: drill-boundaries-reason
+        run: make drill-boundaries-reason
+
+      - name: drill-transition-guard
+        run: make drill-transition-guard
+
+      - name: drill-fork-guard
+        run: make drill-fork-guard
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    # Mêmes images et ports que docker-compose.yml : les commandes et le .env
+    # local restent valables tels quels.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: expense
+          POSTGRES_PASSWORD: expense
+          POSTGRES_DB: expense_io
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U expense -d expense_io"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      localstack:
+        image: localstack/localstack:3.8.1
+        env:
+          SERVICES: s3
+        ports:
+          - 4567:4566
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://expense:expense@localhost:5433/expense_io
+      # Rôle applicatif réel (revue phase/8 §1, ADR-DATA-002) : le
+      # serveur Next et les tests d'intégration s'y connectent —
+      # la RLS est exercée, plus contournée. Migrate/seed gardent
+      # DATABASE_URL (compte d'administration).
+      APP_DATABASE_URL: postgres://expense_app:expense_app_dev_only@localhost:5433/expense_io
+      # Secret de test pour le build/run E2E uniquement (jamais en
+      # production) : exigé depuis la phase 0 (secret JWT hors du code).
+      AUTH_SECRET: ci-e2e-only-ci-e2e-only-ci-e2e-only
+      S3_ENDPOINT: http://localhost:4567
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: test
+      S3_SECRET_ACCESS_KEY: test
+      S3_BUCKET: receipts
+      S3_FORCE_PATH_STYLE: 'true'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (lockfile)
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # `npm run migrate:up` exige un fichier .env (--envPath) : en CI les
+      # variables sont déjà dans l'environnement du job.
+      - name: Migrations
+        run: npx node-pg-migrate up
+
+      - name: S3 bucket
+        run: npm run ensure-bucket
+
+      # Le seed active le rôle applicatif (LOGIN + mot de passe de dev,
+      # posé hors migration) : sans lui, expense_app ne peut pas se
+      # connecter et toutes les requêtes de l'app échouent en CI.
+      - name: Seed (rôle applicatif + données de démo)
+        run: npm run seed
+
+      - name: Build
+        run: npm run build
+
+      # Contrat client (docs/contrat-client-fige.md §7) : capture sur la
+      # base fraîchement seedée, avant les E2E. Le golden écrit (rejets,
+      # soumission) : il doit passer en premier, sur le seed intact.
+      - name: Golden (contrat client)
+        # `next start` hors Playwright : Auth.js refuse l'hôte (500
+        # « server configuration ») sans AUTH_TRUST_HOST. Playwright le
+        # fournit à son propre serveur (playwright.config.ts).
+        env:
+          AUTH_TRUST_HOST: 'true'
+        run: |
+          npx next start -p 3100 > golden-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3100/login && break
+            sleep 1
+          done
+          BASE=http://localhost:3100 node scripts/capture-golden.mjs > golden.live.json
+          node scripts/check-golden.mjs golden.live.json
+          kill %1
+
+      - name: E2E (next start)
+        run: npm run test:e2e
+
+      # Tests d'intégration rejouables (revues phases/7-8) : PostgreSQL
+      # éphémère du job déjà migré ci-dessus, RLS et I14 prouvés ici.
+      - name: Integration (PostgreSQL éphémère)
+        run: RUN_INTEGRATION=1 npx vitest run tests/integration
+
+      - name: Rapport Playwright
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            golden.live.json
+            golden-server.log
+          retention-days: 7

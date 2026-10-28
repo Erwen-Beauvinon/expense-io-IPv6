@@ -1,0 +1,20 @@
+---
+description: Règles pour les tests
+globs: tests/**
+alwaysApply: false
+---
+
+# Tests
+
+- `tests/unit/` : Vitest, sans Docker. Lancer : `make test`.
+- Les tests de `ExpenseNote` sont la cible de `make drill-transition-guard` :
+  conserver les intitulés « refuse d’approuver… » / « refuse de rejeter… ».
+- `tests/e2e/` : Playwright, Docker requis. Lancer : `make test-e2e`.
+  Chaque test reçoit une entreprise neuve via la fixture `company`
+  (`tests/e2e/support/`) : ne jamais dépendre des comptes du seed ni de
+  l'ordre des tests. Les données sont préparées en base ; le parcours testé
+  passe toujours par l'interface.
+- Sélecteurs : rôles et libellés visibles (`getByRole`, `getByLabel`), pas
+  de classes CSS. Les alertes se cherchent dans `main` (Next.js ajoute son
+  propre `role="alert"`).
+- Ne jamais affaiblir une assertion pour la faire passer.
