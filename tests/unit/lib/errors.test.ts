@@ -6,6 +6,7 @@ import {
   DonneesInvalides,
   ManagerIneligible,
   NoteIntrouvable,
+  UtilisateurIntrouvable,
 } from '@/domain/errors'
 import { respondError, respondErreurMetier } from '@/lib/errors'
 
@@ -14,6 +15,7 @@ describe('traducteur d’erreurs (contrats-ports §7)', () => {
     [new DonneesInvalides('Champs invalides'), 400],
     [new AccesRefuse('Unauthorized'), 403],
     [new NoteIntrouvable('Not found'), 404],
+    [new UtilisateurIntrouvable('Not found'), 404],
     [new DejaTranchee('Already decided'), 409],
     [new ManagerIneligible('Invalid manager'), 409],
     [new CycleHierarchique('Cycle'), 409],

@@ -196,6 +196,8 @@ interface UnitOfWork {
 
 // Poignée opaque : aucun accès SQL n'en sort ; seuls les repositories
 // savent l'utiliser. Ni commit ni rollback exposés.
+// Déclarée dans src/ports/UnitOfWork.ts, avec le port qui la produit
+// (notion technique : elle ne vit pas dans le domaine).
 interface Transaction { readonly _marque: unique symbol }
 ```
 
@@ -259,10 +261,11 @@ interface, les convertit — le reste du code ne fabrique plus de
 |---|---|---|---|
 | `DonneesInvalides` | I1, I2, I3, tri hors liste | 400 | message actuel conservé |
 | `NoteIntrouvable` | inexistante ou hors `peutConsulter` | 404 | `Not found` |
+| `UtilisateurIntrouvable` | utilisateur absent ou hors entreprise (rattachement) | 404 | `Not found` |
 | `AccesRefuse` | rôle insuffisant (jamais de détail métier) | 403 | `Unauthorized` |
 | `DejaTranchee` | I6 | 409 | `Already decided` (gelé) |
 | `ManagerIneligible` | I11, I13 | 409 | `Invalid manager` (gelé) |
-| `CycleHierarchique` | I12 | 409 | à libeller, cas nouveau |
+| `CycleHierarchique` | I12 | 409 | `Cycle hiérarchique détecté` |
 | Panne d'infrastructure | port en échec | 500 | `error` générique, **sans stack** |
 
 Deux règles héritées des constats : `404` plutôt que `403` quand
@@ -380,6 +383,8 @@ assemblées ». Contrat minimal attendu de ce point :
    coexistence durable de deux contrats de stockage ou de
    notification.
 
-Reste hors de ce document : le modèle de rôles SQL pour rendre I10
-réel en base (rôle applicatif non-superutilisateur avant la phase 4),
-à coordonner avec le pilote 2 — voir ADR-DATA-002 (draft).
+Hors de ce document : le modèle de rôles SQL qui rend I10 réel en
+base. Il est décidé et implémenté — rôle applicatif `expense_app`,
+non-superutilisateur, migrations `0003` et `0005`, voir ADR-DATA-002
+(`accepted`). Seul le secret de production reste à la charge du
+pilote 2.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ExpenseNote, type ExpenseNoteStatus } from '@/domain/ExpenseNote'
+import { DejaTranchee } from '@/domain/errors'
 
 function note(status: ExpenseNoteStatus): ExpenseNote {
   return new ExpenseNote({
@@ -33,14 +34,16 @@ describe('ExpenseNote', () => {
   it.each<ExpenseNoteStatus>(['approved', 'rejected'])(
     'refuse d’approuver une note déjà %s',
     (status) => {
-      expect(() => note(status).approve()).toThrow('déjà été tranchée')
+      expect(() => note(status).approve()).toThrow(DejaTranchee)
+      expect(() => note(status).approve()).toThrow('Already decided')
     }
   )
 
   it.each<ExpenseNoteStatus>(['approved', 'rejected'])(
     'refuse de rejeter une note déjà %s',
     (status) => {
-      expect(() => note(status).reject()).toThrow('déjà été tranchée')
+      expect(() => note(status).reject()).toThrow(DejaTranchee)
+      expect(() => note(status).reject()).toThrow('Already decided')
     }
   )
 

@@ -1,4 +1,4 @@
-import type { UserRole } from '@/domain/User'
+import type { UserRole } from '@/domain/Role'
 
 // Vue annuaire d'un utilisateur (docs/contrats-ports.md §4) : le
 // domaine Notes ne joint jamais la table `users` ; l'adaptateur

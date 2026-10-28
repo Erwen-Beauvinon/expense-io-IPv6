@@ -5,6 +5,7 @@ export abstract class ErreurMetier extends Error {
   abstract readonly code:
     | 'DonneesInvalides'
     | 'NoteIntrouvable'
+    | 'UtilisateurIntrouvable'
     | 'AccesRefuse'
     | 'DejaTranchee'
     | 'ManagerIneligible'
@@ -17,6 +18,13 @@ export class DonneesInvalides extends ErreurMetier {
 
 export class NoteIntrouvable extends ErreurMetier {
   readonly code = 'NoteIntrouvable' as const
+}
+
+// Utilisateur absent ou hors de l'entreprise de l'acteur (rattachement).
+// Distinct de NoteIntrouvable pour que l'erreur dise ce qui manque ; la
+// réponse publique reste la même (404 « Not found »).
+export class UtilisateurIntrouvable extends ErreurMetier {
+  readonly code = 'UtilisateurIntrouvable' as const
 }
 
 export class AccesRefuse extends ErreurMetier {
