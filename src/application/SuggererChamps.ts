@@ -1,32 +1,20 @@
+import { horsGabaritSuggestion, verifierOctetsRecu } from '@/domain/Justificatif'
 import type {
   AnalyseurDeRecu,
   SuggestionRecu,
 } from '@/ports/AnalyseurDeRecu'
-import { validerOctetsRecu } from '@/application/SoumettreNote'
 
 // Cas d'usage de suggestion du montant et de la date par OCR
-// (phase 5) : porte les limites (taille, types acceptés) comme règles
-// explicites. Le moteur reste remplaçable derrière le port
+// (phase 5) : applique le gabarit du domaine (types, taille) et borne
+// la durée d'analyse. Le moteur reste remplaçable derrière le port
 // AnalyseurDeReçu (adaptateur IA possible sans toucher au métier).
 export interface SuggererChampsDeps {
   analyseur: AnalyseurDeRecu
 }
 
-export const SUGGESTION_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp']
-export const TAILLE_MAX_SUGGESTION = 10 * 1024 * 1024
+// Délai d'analyse : borne technique du moteur, pas une règle métier.
+// Le gabarit (types, taille) vit dans le domaine (Justificatif).
 export const DELAI_SUGGESTION_MS = 15000
-
-// Gabarit vérifiable sur les métadonnées (revue phase/5 §1) : la route
-// le teste AVANT de lire les octets ; le cas d'usage le réapplique.
-export function contenantHorsGabarit(contenant: {
-  mimeType: string
-  size: number
-}): boolean {
-  return (
-    !SUGGESTION_MIME_TYPES.includes(contenant.mimeType) ||
-    contenant.size > TAILLE_MAX_SUGGESTION
-  )
-}
 
 export async function suggererChamps(
   entree: { data: Buffer; mimeType: string; size: number },
@@ -35,11 +23,11 @@ export async function suggererChamps(
 ): Promise<SuggestionRecu> {
   // Hors gabarit : réponse vide, comme pour un reçu illisible
   // (contrat client C03 : {} est une réponse valide).
-  if (contenantHorsGabarit(entree)) return {}
+  if (horsGabaritSuggestion(entree)) return {}
   // Octets incohérents avec le type déclaré (revue V2, point 8) :
   // même réponse vide, rien n'est transmis au moteur OCR.
   try {
-    validerOctetsRecu(entree)
+    verifierOctetsRecu(entree)
   } catch {
     return {}
   }

@@ -114,11 +114,14 @@ interface ExpenseNoteRepository {
   ): Promise<boolean>
 }
 
+// Objets valeur du domaine (src/domain/) : constructeur privé, aucune
+// instance invalide possible — un nombre ou une chaîne bruts ne
+// compilent pas. L'adaptateur lit `.valeur`.
 interface NouvelleNote {
   auteurId: string
-  montant: number              // déjà validé par l'objet métier Montant (I1)
-  dateDepense: string          // YYYY-MM-DD validée (I2)
-  description: string          // vérifiée non vide, stockée telle quelle (I3)
+  montant: Montant             // I1 (src/domain/Montant.ts)
+  dateDepense: DateDepense     // I2, reste une chaîne YYYY-MM-DD
+  description: Description     // I3, stockée rognée
   receiptKey: string           // clé d'un objet déjà stocké (I4, §6)
 }
 ```
@@ -301,12 +304,13 @@ Contrat :
 - exception réservée à la panne du moteur ; `SuggérerChamps` la
   traduit en `{}` journalisé, comme aujourd'hui — le client ne voit
   pas la différence ;
-- les **bornes** sont portées par le cas d'usage, pas par
-  l'adaptateur : types image acceptés (png/jpeg/webp, pas le PDF),
-  taille ≤ 10 Mio alignée sur I3, vérifiées sur les métadonnées avant
-  lecture des octets (revue phase/5, F7), délai 15 s avec annulation
-  réelle (signal honoré, worker terminé) et plafond de concurrence
-  côté adaptateur (saturation → `{}`) ;
+- le **gabarit** est une règle du domaine (`src/domain/Justificatif.ts`,
+  `horsGabaritSuggestion`), pas de l'adaptateur : types image acceptés
+  (png/jpeg/webp, pas le PDF), taille ≤ 10 Mio alignée sur I3,
+  vérifiés sur les métadonnées avant lecture des octets (revue
+  phase/5, F7). Le délai de 15 s avec annulation réelle reste dans le
+  cas d'usage, le plafond de concurrence dans l'adaptateur
+  (saturation → `{}`) : ce sont des bornes techniques ;
 - extension future sans rupture : des champs optionnels (score de
   confiance, moteur utilisé) pourront enrichir `SuggestionRecu` côté
   serveur ; seuls `amount` et `expenseDate` traversent vers le client

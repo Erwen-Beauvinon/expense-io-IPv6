@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { consulterMesNotes } from '@/application/ConsulterMesNotes'
-import { soumettreNote, validerContenantRecu } from '@/application/SoumettreNote'
+import { soumettreNote } from '@/application/SoumettreNote'
+import { verifierContenantRecu } from '@/domain/Justificatif'
 import { resolveActeur } from '@/lib/actor'
 import { auth } from '@/lib/auth'
 import { getNotes, getStockageRecus, getUnitOfWork } from '@/lib/container'
@@ -45,8 +46,8 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Phase 5 : toute la validation métier (I1, I2, bornes OCR) vit dans
-    // SoumettreNote ; la route ne fait que l'adaptation HTTP. Réponses
+    // Phase 5 : toute la validation métier (I1–I3) vit dans le domaine,
+    // appliquée par SoumettreNote ; la route ne fait que l'adaptation HTTP. Réponses
     // inchangées (contrat C02 : 201, mêmes champs, mêmes 400).
     // Revue phase/5 §1 (F7) : les bornes du contenant sont vérifiées sur
     // les métadonnées AVANT de charger les octets en mémoire (mêmes 400
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const receipt = formData.get('receipt')
     if (receipt instanceof File) {
-      validerContenantRecu({ mimeType: receipt.type, size: receipt.size })
+      verifierContenantRecu({ mimeType: receipt.type, size: receipt.size })
     }
     const created = await soumettreNote(
       acteur,

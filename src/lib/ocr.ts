@@ -1,7 +1,10 @@
 import path from 'node:path'
 import { createWorker } from 'tesseract.js'
 
-const SUPPORTED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+// Capacité du moteur, pas une règle métier : Tesseract ne lit que des
+// images (le gabarit métier de la suggestion vit dans le domaine,
+// Justificatif). Garde de l'adaptateur : un type illisible rend {}.
+const TYPES_LISIBLES_PAR_LE_MOTEUR = ['image/png', 'image/jpeg', 'image/webp']
 const TESSDATA_PATH = path.join(process.cwd(), 'tessdata')
 
 const AMOUNT_KEYWORD_PATTERN = /total|montant|ttc|à payer|net à/i
@@ -113,7 +116,7 @@ export async function suggestFields(
   },
   options: { signal?: AbortSignal } = {}
 ): Promise<ExpenseNoteSuggestion> {
-  if (!SUPPORTED_MIME_TYPES.includes(receipt.mimeType)) {
+  if (!TYPES_LISIBLES_PAR_LE_MOTEUR.includes(receipt.mimeType)) {
     return {}
   }
   if (options.signal?.aborted) return {}

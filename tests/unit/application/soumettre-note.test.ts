@@ -8,9 +8,6 @@ import { EcritureIncertaine } from '@/ports/UnitOfWork'
 import {
   extensionPour,
   soumettreNote,
-  validerContenantRecu,
-  validerDateDepense,
-  validerMontant,
   type SoumissionBrute,
 } from '@/application/SoumettreNote'
 
@@ -64,30 +61,6 @@ function deps(overrides: { creer?: unknown; upload?: unknown } = {}) {
   } as unknown as UnitOfWork & { executer: ReturnType<typeof vi.fn> }
   return { notes, stockage, unitOfWork }
 }
-
-describe('validerMontant (I1)', () => {
-  it.each(['12.50', '12', '0.01', ' 7 '])('accepte %s', (brut) => {
-    expect(validerMontant(brut)).toBeGreaterThan(0)
-  })
-  it.each(['12abc', '-5', '0', '', '12.345', 'abc', NaN, null, undefined, 12.5])(
-    'refuse %s sans tronquer',
-    (brut) => {
-      expect(() => validerMontant(brut)).toThrow(DonneesInvalides)
-    }
-  )
-})
-
-describe('validerDateDepense (I2)', () => {
-  it.each(['2026-10-01', '2024-02-29'])('accepte %s', (brute) => {
-    expect(validerDateDepense(brute)).toBe(brute)
-  })
-  it.each(['30/01/2026', '2026-02-30', '2026-13-01', '', '2026-1-1', null])(
-    'refuse %s',
-    (brute) => {
-      expect(() => validerDateDepense(brute)).toThrow(DonneesInvalides)
-    }
-  )
-})
 
 describe('soumettreNote (I4)', () => {
   it('envoie le reçu avant de créer la note, clé au format gelé', async () => {
@@ -160,17 +133,22 @@ describe('soumettreNote (I4)', () => {
     expect(d.stockage.supprimer).not.toHaveBeenCalled()
   })
 
-  it('validerContenantRecu refuse type et taille sans les octets', () => {
-    expect(() => validerContenantRecu({ mimeType: 'text/plain', size: 3 })).toThrow(DonneesInvalides)
-    expect(() =>
-      validerContenantRecu({ mimeType: 'image/png', size: 10 * 1024 * 1024 + 1 })
-    ).toThrow(DonneesInvalides)
-    expect(() => validerContenantRecu({ mimeType: 'image/png', size: 3 })).not.toThrow()
+  it('extensionPour ne dépend que du type validé (liste fermée du domaine)', () => {
+    expect(extensionPour('image/png')).toBe('.png')
+    expect(extensionPour('image/jpeg')).toBe('.jpg')
+    expect(extensionPour('application/pdf')).toBe('.pdf')
   })
 
-  it('extensionPour ne dépend que du type MIME validé', () => {
-    expect(extensionPour('image/png')).toBe('.png')
-    expect(extensionPour('application/pdf')).toBe('.pdf')
-    expect(extensionPour('image/x-inconnu')).toBe('')
+  it('transmet au port les objets valeur du domaine, pas des primitives', async () => {
+    const d = deps()
+    await soumettreNote(ACTEUR, soumission({ montant: ' 12.50 ', description: '  Taxi  ' }), d)
+    const entree = d.notes.creer.mock.calls[0][1] as {
+      montant: { valeur: number }
+      dateDepense: { valeur: string }
+      description: { valeur: string }
+    }
+    expect(entree.montant.valeur).toBe(12.5)
+    expect(entree.dateDepense.valeur).toBe('2026-10-01')
+    expect(entree.description.valeur).toBe('Taxi')
   })
 })

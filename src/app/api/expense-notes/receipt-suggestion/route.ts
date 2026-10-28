@@ -1,4 +1,5 @@
-import { contenantHorsGabarit, suggererChamps } from '@/application/SuggererChamps'
+import { suggererChamps } from '@/application/SuggererChamps'
+import { horsGabaritSuggestion } from '@/domain/Justificatif'
 import { auth } from '@/lib/auth'
 import { getAnalyseur } from '@/lib/container'
 import { respondError } from '@/lib/errors'
@@ -16,11 +17,11 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Champs invalides' }, { status: 400 })
     }
 
-    // Phase 5 : les bornes (types, taille) vivent dans le cas d'usage.
+    // Les bornes (types, taille) vivent dans le domaine (Justificatif).
     // Les réponses restent celles du contrat gelé C03.
     // Revue phase/5 §1 (F7) : gabarit vérifié sur les métadonnées AVANT
     // de charger les octets — un hors-gabarit rend {} sans lecture.
-    if (contenantHorsGabarit({ mimeType: receipt.type, size: receipt.size })) {
+    if (horsGabaritSuggestion({ mimeType: receipt.type, size: receipt.size })) {
       return Response.json({})
     }
     const buffer = Buffer.from(await receipt.arrayBuffer())

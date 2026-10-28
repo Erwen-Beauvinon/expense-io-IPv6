@@ -218,9 +218,9 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
        RETURNING id`,
       [
         entree.auteurId,
-        entree.montant,
-        entree.dateDepense,
-        entree.description,
+        entree.montant.valeur,
+        entree.dateDepense.valeur,
+        entree.description.valeur,
         entree.receiptKey,
       ]
     )

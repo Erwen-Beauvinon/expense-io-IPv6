@@ -56,12 +56,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   validation (`Number.parseFloat` accepte `12abc`, aucune borne).
 - **À `265924b`** : violé. `Number.parseFloat` + seuls tests
   `isFinite` et `> 0` (`src/app/api/expense-notes/route.ts:69-73`).
-- **État implémenté (V2)** : tenu. `validerMontant`
-  (`src/application/SoumettreNote.ts`) refuse toute saisie non
-  strictement décimale, plus de 2 décimales, ≤ 0 ou > 99 999 999,99 →
-  `400 Montant invalide`. Règle encore dans le cas d'usage (isolation
-  dans le domaine : lot 2). Tests :
-  `tests/unit/application/soumettre-note.test.ts`.
+- **État implémenté (V2)** : tenu. Objet valeur `Montant`
+  (`src/domain/Montant.ts`) : refuse toute saisie non strictement
+  décimale, plus de 2 décimales, ≤ 0 ou au-delà de `MONTANT_MAX` (99 999
+  999,99) → `400 Montant invalide`. Le port `NouvelleNote` exige un
+  `Montant` : un nombre brut ne compile pas. Tests :
+  `tests/unit/domain/saisie.test.ts` ; capacité `numeric(10,2)` prouvée
+  par `tests/integration/montant-capacite.test.ts`.
 - **Garantie cible** : objet métier `Montant` ; refus en `DonnéesInvalides`
   → HTTP 400 (contrat client §5).
 - **Tests** : D — `Montant` refuse `0`, négatif, `NaN`, `12abc`,
@@ -82,9 +83,10 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   observation.
 - **À `265924b`** : violé. Simple contrôle `typeof string`
   (`route.ts:74`), l'erreur remonte en 500 via `respondError`.
-- **État implémenté (V2)** : tenu. `validerDateDepense` refuse toute
-  date non calendaire ou hors format `YYYY-MM-DD` → `400 Date invalide`,
-  jamais 500. Règle encore dans le cas d'usage (lot 2).
+- **État implémenté (V2)** : tenu. Objet valeur `DateDepense`
+  (`src/domain/DateDepense.ts`), qui reste une chaîne `YYYY-MM-DD` :
+  toute date non calendaire → `400 Date invalide`, jamais 500. Exigé par
+  le port `NouvelleNote`.
 - **Garantie cible** : objet métier `DateDépense`.
 - **Tests** : D — refuse `2026-02-30`, `30/01/2026`, chaîne vide ;
   accepte `2024-02-29`. C — le format renvoyé reste `YYYY-MM-DD`.
@@ -109,11 +111,12 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **À `265924b`** : tenu pour la création de note, **non tenu** pour la
   suggestion OCR (aucune limite, voir I-hors-registre en fin de
   document et ticket OCR).
-- **État implémenté (V2)** : tenu. Création : description rognée et non
-  vide, justificatif présent, type parmi les 4 autorisés, ≤ 10 Mio,
-  contrôlés sur les métadonnées avant lecture des octets
-  (`validerContenantRecu`). Suggestion : gabarit images ≤ 10 Mio, hors
-  gabarit → `{}` (`SuggererChamps`). Messages du contrat client §5.
+- **État implémenté (V2)** : tenu. Domaine : objet valeur `Description`
+  (rognée, non vide) et `verifierContenantRecu`
+  (`src/domain/Justificatif.ts` : 4 types, 10 Mio), appliqués par la
+  route avant lecture des octets puis par `SoumettreNote`. Suggestion :
+  `horsGabaritSuggestion` (images seules, même taille maximale), hors
+  gabarit → `{}`. Messages du contrat client §5.
 - **Garantie cible** : validation portée par `SoumettreNote` et
   `SuggérerChamps` avec les mêmes bornes.
 - **Tests** : A — description blanche refusée ; type MIME hors liste
