@@ -412,9 +412,14 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **À `265924b`** : règle métier tenue en séquentiel, atomicité
   violée : pas de transaction, course possible entre le contrôle
   d'existence et les insertions.
-- **État implémenté (V2)** : tenu. `Inscrire` en une transaction ; la
-  contrainte `UNIQUE(email_domain)` arbitre les inscriptions
-  simultanées. Test : `tests/integration/inscrire-db.test.ts`.
+- **État implémenté (V2)** : tenu. Règles du domaine
+  (`src/domain/Inscription.ts` : champs, `domaineDe`,
+  `nomEntrepriseDepuisDomaine`, `roleALInscription`) appliquées par
+  `Inscrire` en une transaction ; la contrainte `UNIQUE(email_domain)`
+  arbitre les inscriptions simultanées, et la course sur l'email est
+  traduite par l'adaptateur (le cas d'usage ne connaît plus le code
+  PostgreSQL). Tests : `tests/unit/domain/inscription.test.ts`,
+  `tests/integration/inscrire-db.test.ts`.
 - **Garantie cible** : cas d'usage `Inscrire` sous `UnitOfWork`,
   unicité portée aussi par la contrainte `UNIQUE(email_domain)`.
 - **Tests** : I — inscriptions concurrentes sur un domaine nouveau :
@@ -440,9 +445,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   d'attribution de rôle).
 - **À `265924b`** : tenu, par absence de fonctionnalité — donc sans
   test qui le protège d'une régression future.
-- **État implémenté (V2)** : tenu. `Inscrire` n'attribue que `hr_admin`
-  ou `employee` ; aucune route n'écrit `role = 'manager'`. Garantie
-  encore implicite (lot 2 : par le type).
+- **État implémenté (V2)** : tenu, garanti par le type :
+  `roleALInscription` renvoie un `RoleInscription` (`hr_admin` ou
+  `employee`), exigé par le port `NouvelUtilisateur` — une inscription
+  ne peut pas attribuer `manager`. Aucune route n'écrit `role =
+  'manager'`.
 - **Tests** : A/I — tenter d'obtenir `manager` via inscription et via
   chaque route RH : rôle résultant toujours `employee`/`hr_admin`
   selon I14 ; revue de code : aucune route n'écrit `role = 'manager'`.

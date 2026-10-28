@@ -178,7 +178,9 @@ interface AnnuaireOrganisation {
 
   // Inscription (I14, I15)
   creerEntreprise(tx: Transaction, nom: string, domaine: string): Promise<{ id: string; nouvelle: boolean }>
-  creerUtilisateur(tx: Transaction, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire>
+  // null si l'email est déjà pris : l'adaptateur traduit la violation
+  // d'unicité, le cas d'usage ne voit aucun code d'erreur de la base.
+  creerUtilisateur(tx: Transaction, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire | null>
 }
 ```
 

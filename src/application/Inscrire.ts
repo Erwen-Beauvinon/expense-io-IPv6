@@ -1,15 +1,20 @@
 import { DonneesInvalides } from '@/domain/errors'
+import {
+  champsInscriptionValides,
+  domaineDe,
+  estDomainePublic,
+  LONGUEUR_MIN_MOT_DE_PASSE,
+  nomEntrepriseDepuisDomaine,
+  roleALInscription,
+} from '@/domain/Inscription'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 import type { AnnuaireOrganisation } from '@/ports/AnnuaireOrganisation'
 import type { UnitOfWork } from '@/ports/UnitOfWork'
-import { isNonEmptyString, isValidEmail } from '@/utils/validators'
 
 // Cas d'usage d'inscription (phase 7) : crée ou rejoint une entreprise
-// en une seule transaction. « Le premier inscrit d'un domaine devient
-// RH, les suivants employés » (I14) : l'unicité est portée par la
-// contrainte UNIQUE(email_domain) — même en cas d'inscriptions
-// simultanées, une seule crée l'entreprise. Le rôle manager n'est
-// jamais attribué ici (I15) : seulement hr_admin ou employee.
+// en une seule transaction. Les règles (champs, domaine, nom
+// d'entreprise, rôle : I14, I15) sont celles du domaine (Inscription) ;
+// la concurrence est arbitrée par les contraintes UNIQUE de la base.
 export interface InscrireDeps {
   annuaire: AnnuaireOrganisation
   unitOfWork: UnitOfWork
@@ -22,8 +27,6 @@ export interface InscriptionBrute {
   motDePasse: unknown
 }
 
-export const LONGUEUR_MIN_MOT_DE_PASSE = 8
-
 // Messages publics gelés : identiques à ceux de l'ancienne Server
 // Action (contrat client : Server Action inchangée).
 export const MESSAGE_CHAMPS_INSCRIPTION = `Nom requis, email invalide, ou mot de passe trop court (${LONGUEUR_MIN_MOT_DE_PASSE} caractères minimum).`
@@ -31,83 +34,48 @@ export const MESSAGE_EMAIL_EXISTANT = 'Un compte existe déjà avec cet email.'
 export const MESSAGE_DOMAINE_PUBLIC =
   'Inscription impossible avec un domaine e-mail public : utilise l’adresse de ton entreprise.'
 
-// Domaines grand public refusés (revue V2, point 4) : le premier
-// inscrit d'un domaine devient RH sans vérification d'e-mail — avec
-// un domaine public (ou celui d'une vraie entreprise usurpé par un
-// tiers), n'importe qui prendrait la main sur les notes des inscrits
-// suivants. La vérification de domaine complète reste au pilote 2 ;
-// en attendant, ces domaines ne peuvent fonder ni rejoindre une
-// entreprise par l'inscription libre.
-export const DOMAINES_PUBLICS = new Set([
-  'gmail.com', 'googlemail.com',
-  'yahoo.com', 'yahoo.fr',
-  'hotmail.com', 'hotmail.fr',
-  'outlook.com', 'outlook.fr',
-  'live.com', 'live.fr', 'msn.com',
-  'aol.com', 'icloud.com', 'me.com',
-  'protonmail.com', 'proton.me',
-  'gmx.com', 'gmx.fr', 'mail.com',
-  'orange.fr', 'free.fr', 'sfr.fr', 'laposte.net',
-])
-
-function estViolationUnicite(erreur: unknown): boolean {
-  return (
-    typeof erreur === 'object' &&
-    erreur !== null &&
-    'code' in erreur &&
-    (erreur as { code: unknown }).code === '23505'
-  )
-}
-
 export async function inscrire(
   inscription: InscriptionBrute,
   deps: InscrireDeps
 ): Promise<UtilisateurAnnuaire> {
   const { nom, email, motDePasse } = inscription
-  if (
-    !isNonEmptyString(nom) ||
-    typeof email !== 'string' ||
-    !isValidEmail(email) ||
-    typeof motDePasse !== 'string' ||
-    motDePasse.length < LONGUEUR_MIN_MOT_DE_PASSE
-  ) {
+  if (!champsInscriptionValides({ nom, email, motDePasse })) {
     throw new DonneesInvalides(MESSAGE_CHAMPS_INSCRIPTION)
   }
-
-  const domaine = email.split('@')[1].toLowerCase()
-  if (DOMAINES_PUBLICS.has(domaine)) {
+  // Champs validés par le domaine : ce sont des chaînes.
+  const nomValide = nom as string
+  const emailValide = email as string
+  const domaine = domaineDe(emailValide)
+  // Domaine e-mail public refusé avant tout hachage ni écriture (revue
+  // V2, point 4 : un tel domaine ne fonde ni ne rejoint une entreprise).
+  if (estDomainePublic(domaine)) {
     throw new DonneesInvalides(MESSAGE_DOMAINE_PUBLIC)
   }
-  const motDePasseHash = await deps.hacherMotDePasse(motDePasse)
+  const motDePasseHash = await deps.hacherMotDePasse(motDePasse as string)
 
   // Parcours public, sans acteur : l'isolation est portée par le
   // domaine email, pas par une entreprise (executerPublic).
-  try {
-    return await deps.unitOfWork.executerPublic(async (tx) => {
-      const existant = await deps.annuaire.trouverUtilisateurParEmail(tx, email)
-      if (existant) throw new DonneesInvalides(MESSAGE_EMAIL_EXISTANT)
+  return deps.unitOfWork.executerPublic(async (tx) => {
+    const existant = await deps.annuaire.trouverUtilisateurParEmail(tx, emailValide)
+    if (existant) throw new DonneesInvalides(MESSAGE_EMAIL_EXISTANT)
 
-      const entreprise = await deps.annuaire.creerEntreprise(
-        tx,
-        domaine.split('.')[0],
-        domaine
-      )
-      return deps.annuaire.creerUtilisateur(tx, {
-        name: nom.trim(),
-        email,
-        passwordHash: motDePasseHash,
-        companyId: entreprise.id,
-        role: entreprise.nouvelle ? 'hr_admin' : 'employee',
-      })
+    const entreprise = await deps.annuaire.creerEntreprise(
+      tx,
+      nomEntrepriseDepuisDomaine(domaine),
+      domaine
+    )
+    const cree = await deps.annuaire.creerUtilisateur(tx, {
+      name: nomValide.trim(),
+      email: emailValide,
+      passwordHash: motDePasseHash,
+      companyId: entreprise.id,
+      role: roleALInscription(entreprise.nouvelle),
     })
-  } catch (erreur) {
-    // Course perdue sur l'email (contrainte UNIQUE) : même réponse que
-    // le contrôle préalable (message gelé du contrat). L'énumération
-    // de comptes reste possible, comme avant — le comportement est
-    // celui du contrat gelé, pas une absence de fuite (revue phase/7).
-    if (estViolationUnicite(erreur)) {
-      throw new DonneesInvalides(MESSAGE_EMAIL_EXISTANT)
-    }
-    throw erreur
-  }
+    // Course perdue sur l'email (contrainte UNIQUE, traduite en null par
+    // l'adaptateur) : même réponse que le contrôle préalable (message
+    // gelé du contrat). L'énumération de comptes reste possible, comme
+    // avant — comportement du contrat gelé (revue phase/7).
+    if (!cree) throw new DonneesInvalides(MESSAGE_EMAIL_EXISTANT)
+    return cree
+  })
 }
