@@ -1,19 +1,13 @@
 import { consulterAnnuaire } from '@/application/ConsulterAnnuaire'
-import { resolveActeur } from '@/lib/actor'
+import { ouvrirEspace, ESPACE_RH } from '@/app/api/_partage/espace'
 import { auth } from '@/lib/auth'
 import { getAnnuaire } from '@/lib/container'
 import { respondError } from '@/lib/errors'
 
 export async function GET() {
   try {
-    const session = await auth()
-    if (!session?.user || session.user.role !== 'hr_admin') {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
-    const acteur = await resolveActeur(session)
-    if (!acteur) {
-      return Response.json({ error: 'Unauthorized' }, { status: 403 })
-    }
+    const acteur = await ouvrirEspace(await auth(), ESPACE_RH)
+    if (acteur instanceof Response) return acteur
 
     const utilisateurs = await consulterAnnuaire(acteur, getAnnuaire())
     return Response.json(

@@ -46,7 +46,8 @@ function deps() {
       return { id, nouvelle: true }
     }),
     creerUtilisateur: vi.fn(
-      async (_tx: unknown, entree: NouvelUtilisateur) => utilisateur({ ...entree })
+      async (_tx: unknown, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire | null> =>
+        utilisateur({ ...entree })
     ),
   } satisfies AnnuaireOrganisation
   const unitOfWork = {
@@ -131,9 +132,8 @@ describe('inscrire (I14, I15)', () => {
 
   it('une course sur le même email échoue en double avec le message gelé', async () => {
     const d = deps()
-    d.annuaire.creerUtilisateur.mockRejectedValueOnce(
-      Object.assign(new Error('duplicate key'), { code: '23505' })
-    )
+    // L'adaptateur traduit la violation d'unicité en null (port).
+    d.annuaire.creerUtilisateur.mockResolvedValueOnce(null)
     await expect(inscrire(INSCRIPTION, d)).rejects.toThrowError(
       new DonneesInvalides(MESSAGE_EMAIL_EXISTANT)
     )

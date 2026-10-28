@@ -1,45 +1,24 @@
 import type { Acteur } from '@/domain/Acteur'
-import {
-  DejaTranchee,
-  DonneesInvalides,
-  NoteIntrouvable,
-} from '@/domain/errors'
+import { DejaTranchee, NoteIntrouvable } from '@/domain/errors'
+import { Motif } from '@/domain/Motif'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { AnnuaireOrganisation } from '@/ports/AnnuaireOrganisation'
 import type { ExpenseNoteRepository } from '@/ports/ExpenseNoteRepository'
 import type { NotificationPort } from '@/ports/NotificationPort'
+import { peutDecider } from '@/domain/PolitiqueAcces'
 import { resoudreValidateurs } from '@/application/resoudreValidateurs'
 
 // Cas d'usage unique de décision (phase 4) : remplace les 4 routes
-// approve/reject. S'appuie sur la machine à états du domaine (I5) et
-// la règle valideursDe (I7, I8, ADR-ARCH-002). Transition atomique :
+// approve/reject. S'appuie sur la machine à états du domaine (I5), le
+// motif du domaine (ADR-DOMAIN-002) et la règle des valideurs (I7, I8,
+// ADR-ARCH-002). Transition atomique :
 // la mise à jour ne s'applique qu'à une note encore pending, sinon
 // DéjàTranchée → 409.
 export interface TrancherNoteDeps {
   notes: ExpenseNoteRepository
   annuaire: AnnuaireOrganisation
   notificateur: NotificationPort
-}
-
-// Motif : obligatoire et non vide au rejet (ADR-DOMAIN-002 accepted,
-// dérogation contrat client ADR-ARCH-003), facultatif à l'approbation,
-// 500 caractères maximum, texte brut dans les deux cas.
-export function validerMotif(decision: Decision, reason: unknown): string | null {
-  if (reason === null || reason === undefined || reason === '') {
-    if (decision === 'rejected') throw new DonneesInvalides('Motif invalide')
-    return null
-  }
-  if (typeof reason !== 'string') throw new DonneesInvalides('Motif invalide')
-  const motif = reason.trim()
-  if (motif.length === 0) {
-    if (decision === 'rejected') throw new DonneesInvalides('Motif invalide')
-    return null
-  }
-  // Longueur en points de code (pas en unités UTF-16) : 500 caractères
-  // perçus, y compris avec des émojis (revues phase/4).
-  if ([...motif].length > 500) throw new DonneesInvalides('Motif invalide')
-  return motif
 }
 
 export async function trancherNote(
@@ -51,7 +30,7 @@ export async function trancherNote(
 ): Promise<NoteAvecAuteur> {
   // Seuls manager et RH tranchent ; tout autre rôle reçoit la même
   // réponse qu'une note inexistante (pas de fuite d'existence).
-  if (acteur.role !== 'manager' && acteur.role !== 'hr_admin') {
+  if (!peutDecider(acteur.role)) {
     throw new NoteIntrouvable('Not found')
   }
   const cible = await deps.notes.trouverParId(acteur, noteId)
@@ -71,7 +50,13 @@ export async function trancherNote(
   )
   if (!valideurs.includes(acteur.id)) throw new NoteIntrouvable('Not found')
 
-  const motif = validerMotif(decision, reason)
+  const motif = Motif.pour(decision, reason)
+  // I5 : la transition est portée par l'entité du domaine. Une note lue
+  // déjà tranchée lève DejaTranchee (409) sans écriture. Ce n'est pas la
+  // garde de concurrence : l'écriture conditionnelle ci-dessous reste
+  // seule à garantir I6 entre deux requêtes simultanées (ADR-DOMAIN-001).
+  if (decision === 'approved') cible.note.approve()
+  else cible.note.reject()
   const appliquee = await deps.notes.trancherSiEnAttente(
     acteur,
     noteId,
@@ -92,7 +77,7 @@ export async function trancherNote(
       decision,
       decidedBy: acteur.id,
       decidedAt: new Date(),
-      motif,
+      motif: motif?.valeur ?? null,
     })
   } catch (erreur) {
     console.error('[notification] échec d’envoi après décision', erreur)

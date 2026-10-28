@@ -1,3 +1,4 @@
+import { ROLES_RATTACHABLES } from '@/domain/Hierarchie'
 import type { Transaction } from '@/ports/UnitOfWork'
 import type { UtilisateurAnnuaire } from '@/domain/UtilisateurAnnuaire'
 import { getPool } from '@/lib/db'
@@ -32,6 +33,16 @@ function versUtilisateur(ligne: LigneUtilisateur): UtilisateurAnnuaire {
 
 // Lectures bornées à l'entreprise en WHERE : la table `users` n'a pas
 // de RLS (ADR-DATA-001), donc aucune lecture ne s'en passe.
+// Violation d'une contrainte UNIQUE (code PostgreSQL 23505).
+function estViolationUnicite(erreur: unknown): boolean {
+  return (
+    typeof erreur === 'object' &&
+    erreur !== null &&
+    'code' in erreur &&
+    (erreur as { code: unknown }).code === '23505'
+  )
+}
+
 export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
   async trouverUtilisateur(
     companyId: string,
@@ -76,7 +87,7 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
 
   async listerCollaborateurs(companyId: string): Promise<UtilisateurAnnuaire[]> {
     // Phase 6 : annuaire des collaborateurs gérés (employés + managers),
-    // à l'identique de l'ancienne route (WHERE role IN ... de main) :
+    // rôles rattachables du domaine (ROLES_RATTACHABLES), comme l'ancienne route :
     // les comptes RH n'y figurent pas (C08 gelé à 2 utilisateurs en
     // démo). Lecture bornée à l'entreprise, sans jointure Notes.
     const result = await getPool().query<{
@@ -88,9 +99,9 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
       email: string
     }>(
       `SELECT id, company_id, role, manager_id, name, email FROM users
-       WHERE company_id = $1 AND role IN ('employee', 'manager')
+       WHERE company_id = $1 AND role = ANY($2::text[])
        ORDER BY name`,
-      [companyId]
+      [companyId, [...ROLES_RATTACHABLES]]
     )
     return result.rows.map((ligne) => ({
       id: ligne.id,
@@ -174,29 +185,38 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
   async creerUtilisateur(
     tx: Transaction,
     entree: NouvelUtilisateur
-  ): Promise<UtilisateurAnnuaire> {
+  ): Promise<UtilisateurAnnuaire | null> {
     // Phase 7 : la contrainte UNIQUE(email) tranche les doublons
-    // concurrents (erreur 23505 traduite par Inscrire).
+    // concurrents. Sa violation (code PostgreSQL 23505) est traduite ici
+    // en « email déjà pris » (null) : le cas d'usage ne connaît pas la
+    // base. La transaction est alors avortée ; le cas d'usage lève, ce
+    // qui la fait annuler.
     const client = clientDe(tx)
-    const insere = await client.query<{
-      id: string
-      company_id: string
-      role: 'employee' | 'manager' | 'hr_admin'
-      manager_id: string | null
-      name: string
-      email: string
-    }>(
-      `INSERT INTO users (name, email, password_hash, company_id, role)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, company_id, role, manager_id, name, email`,
-      [
-        entree.name,
-        entree.email,
-        entree.passwordHash,
-        entree.companyId,
-        entree.role,
-      ]
-    )
+    let insere
+    try {
+      insere = await client.query<{
+        id: string
+        company_id: string
+        role: 'employee' | 'manager' | 'hr_admin'
+        manager_id: string | null
+        name: string
+        email: string
+      }>(
+        `INSERT INTO users (name, email, password_hash, company_id, role)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, company_id, role, manager_id, name, email`,
+        [
+          entree.name,
+          entree.email,
+          entree.passwordHash,
+          entree.companyId,
+          entree.role,
+        ]
+      )
+    } catch (erreur) {
+      if (estViolationUnicite(erreur)) return null
+      throw erreur
+    }
     const ligne = insere.rows[0]
     return {
       id: ligne.id,
@@ -207,4 +227,5 @@ export class PgAnnuaireOrganisation implements AnnuaireOrganisation {
       email: ligne.email,
     }
   }
+
 }

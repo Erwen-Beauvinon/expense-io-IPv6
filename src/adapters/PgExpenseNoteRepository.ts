@@ -1,8 +1,10 @@
 import type { Acteur } from '@/domain/Acteur'
 import { ExpenseNote } from '@/domain/ExpenseNote'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
+import type { Motif } from '@/domain/Motif'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
+import { peutLireHistoriqueDe } from '@/domain/PolitiqueAcces'
 import type { Transaction } from '@/ports/UnitOfWork'
 import { getPool, withUserScope } from '@/lib/db'
 import type {
@@ -55,6 +57,57 @@ function versNoteAvecAuteur(ligne: LigneNote): NoteAvecAuteur {
   }
 }
 
+// Prédicat unique « l'acteur est valideur courant de la note `en` »
+// (tableau ADR-ARCH-002 : direct, N+1, RH des lignes 2-3), toujours dans
+// l'entreprise de l'acteur et jamais sur sa propre note (I7). Partagé
+// par la décision et la file manager ; translitération en SQL de
+// calculerValideurs (domaine), et des policies RLS de la migration 0005.
+// Les trois versions sont confrontées à la même table de vérité par
+// tests/integration/concordance-valideurs.test.ts. Paramètres : les
+// placeholders SQL de l'acteur et de son entreprise.
+export function predicatValideur(acteur: string, entreprise: string): string {
+  return `en.user_id <> ${acteur}
+         AND EXISTS (
+           SELECT 1
+           FROM users AS a
+           LEFT JOIN users AS m ON m.id = a.manager_id
+           WHERE a.id = en.user_id
+             AND a.company_id = ${entreprise}
+             AND (
+               EXISTS (
+                 SELECT 1 FROM users AS direct
+                 WHERE direct.id = a.manager_id
+                   AND direct.role = 'manager'
+                   AND direct.id = ${acteur}
+                   AND direct.company_id = ${entreprise}
+               )
+               OR EXISTS (
+                 SELECT 1 FROM users AS direct
+                 JOIN users AS superieur ON superieur.id = direct.manager_id
+                 WHERE direct.id = a.manager_id
+                   AND direct.role = 'manager'
+                   AND superieur.id = ${acteur}
+                   AND superieur.role = 'manager'
+                   AND superieur.company_id = ${entreprise}
+               )
+               OR (
+                 EXISTS (
+                   SELECT 1 FROM users AS h
+                   WHERE h.id = ${acteur}
+                     AND h.role = 'hr_admin'
+                     AND h.company_id = ${entreprise}
+                 )
+                 AND (
+                   a.role = 'hr_admin'
+                   OR a.manager_id IS NULL
+                   OR m.id IS NULL
+                   OR NOT (m.role = 'manager' AND m.manager_id IS NOT NULL)
+                 )
+               )
+             )
+         )`
+}
+
 const SELECT_AVEC_AUTEUR = `
   SELECT en.*, u.company_id AS auteur_company_id,
          u.manager_id AS auteur_manager_id, u.role AS auteur_role
@@ -86,7 +139,7 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
   ): Promise<NoteAvecAuteur[]> {
     // Phase 2 : historique personnel uniquement. Les listes
     // manager/RH arrivent avec ListerNotesÀTrancher (phase 4).
-    if (acteur.id !== auteurId) return []
+    if (!peutLireHistoriqueDe(acteur, auteurId)) return []
     return withUserScope(acteur.id, async (client) => {
       const result = await client.query<LigneNote>(
         `${SELECT_AVEC_AUTEUR} WHERE en.user_id = $1 ORDER BY ${ORDRE_SQL[tri]}`,
@@ -100,7 +153,7 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null
+    motif: Motif | null
   ): Promise<boolean> {
     // Phase 4 (revues) : écriture conditionnelle unique (I6) +
     // traçabilité interne (migration 0002). Le WHERE réplique la
@@ -117,47 +170,8 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
         `UPDATE expense_notes AS en
          SET status = $1, decided_by = $2, decided_at = now(), decision_reason = $3
          WHERE en.id = $4 AND en.status = 'pending'
-         AND en.user_id <> $2
-         AND EXISTS (
-           SELECT 1
-           FROM users AS a
-           LEFT JOIN users AS m ON m.id = a.manager_id
-           WHERE a.id = en.user_id
-             AND a.company_id = $5
-             AND (
-               EXISTS (
-                 SELECT 1 FROM users AS direct
-                 WHERE direct.id = a.manager_id
-                   AND direct.role = 'manager'
-                   AND direct.id = $2
-                   AND direct.company_id = $5
-               )
-               OR EXISTS (
-                 SELECT 1 FROM users AS direct
-                 JOIN users AS superieur ON superieur.id = direct.manager_id
-                 WHERE direct.id = a.manager_id
-                   AND direct.role = 'manager'
-                   AND superieur.id = $2
-                   AND superieur.role = 'manager'
-                   AND superieur.company_id = $5
-               )
-               OR (
-                 EXISTS (
-                   SELECT 1 FROM users AS h
-                   WHERE h.id = $2
-                     AND h.role = 'hr_admin'
-                     AND h.company_id = $5
-                 )
-                 AND (
-                   a.role = 'hr_admin'
-                   OR a.manager_id IS NULL
-                   OR m.id IS NULL
-                   OR NOT (m.role = 'manager' AND m.manager_id IS NOT NULL)
-                 )
-               )
-             )
-         )`,
-        [decision, acteur.id, motif, noteId, acteur.companyId]
+         AND ${predicatValideur('$2', '$5')}`,
+        [decision, acteur.id, motif?.valeur ?? null, noteId, acteur.companyId]
       )
       return (ecrit.rowCount ?? 0) > 0
     })
@@ -173,6 +187,8 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
     // racine, tableau ligne 2) reste accessible via l'API.
     return withUserScope(acteur.id, async (client) => {
       if (acteur.role === 'hr_admin') {
+        // File RH restreinte (figureDansLaFile) : auteurs sans manager et
+        // notes de RH, jamais les siennes.
         const result = await client.query<LigneNote>(
           `${SELECT_AVEC_AUTEUR} WHERE u.company_id = $1 AND en.status = 'pending'
            AND en.user_id <> $2
@@ -182,14 +198,12 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
         )
         return result.rows.map(versNoteAvecAuteur)
       }
+      // Manager : même prédicat que la décision — la file est exactement
+      // l'ensemble des notes en attente dont il est valideur (direct ou
+      // N+1), figureDansLaFile côté domaine.
       const result = await client.query<LigneNote>(
         `${SELECT_AVEC_AUTEUR} WHERE u.company_id = $1 AND en.status = 'pending'
-         AND (
-           u.manager_id = $2
-           OR u.manager_id IN (
-             SELECT id FROM users WHERE manager_id = $2 AND company_id = $1
-           )
-         )
+         AND ${predicatValideur('$2', '$1')}
          ORDER BY en.created_at ASC`,
         [acteur.companyId, acteur.id]
       )
@@ -218,9 +232,9 @@ export class PgExpenseNoteRepository implements ExpenseNoteRepository {
        RETURNING id`,
       [
         entree.auteurId,
-        entree.montant,
-        entree.dateDepense,
-        entree.description,
+        entree.montant.valeur,
+        entree.dateDepense.valeur,
+        entree.description.valeur,
         entree.receiptKey,
       ]
     )

@@ -56,12 +56,13 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   validation (`Number.parseFloat` accepte `12abc`, aucune borne).
 - **À `265924b`** : violé. `Number.parseFloat` + seuls tests
   `isFinite` et `> 0` (`src/app/api/expense-notes/route.ts:69-73`).
-- **État implémenté (V2)** : tenu. `validerMontant`
-  (`src/application/SoumettreNote.ts`) refuse toute saisie non
-  strictement décimale, plus de 2 décimales, ≤ 0 ou > 99 999 999,99 →
-  `400 Montant invalide`. Règle encore dans le cas d'usage (isolation
-  dans le domaine : lot 2). Tests :
-  `tests/unit/application/soumettre-note.test.ts`.
+- **État implémenté (V2)** : tenu. Objet valeur `Montant`
+  (`src/domain/Montant.ts`) : refuse toute saisie non strictement
+  décimale, plus de 2 décimales, ≤ 0 ou au-delà de `MONTANT_MAX` (99 999
+  999,99) → `400 Montant invalide`. Le port `NouvelleNote` exige un
+  `Montant` : un nombre brut ne compile pas. Tests :
+  `tests/unit/domain/saisie.test.ts` ; capacité `numeric(10,2)` prouvée
+  par `tests/integration/montant-capacite.test.ts`.
 - **Garantie cible** : objet métier `Montant` ; refus en `DonnéesInvalides`
   → HTTP 400 (contrat client §5).
 - **Tests** : D — `Montant` refuse `0`, négatif, `NaN`, `12abc`,
@@ -82,9 +83,10 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   observation.
 - **À `265924b`** : violé. Simple contrôle `typeof string`
   (`route.ts:74`), l'erreur remonte en 500 via `respondError`.
-- **État implémenté (V2)** : tenu. `validerDateDepense` refuse toute
-  date non calendaire ou hors format `YYYY-MM-DD` → `400 Date invalide`,
-  jamais 500. Règle encore dans le cas d'usage (lot 2).
+- **État implémenté (V2)** : tenu. Objet valeur `DateDepense`
+  (`src/domain/DateDepense.ts`), qui reste une chaîne `YYYY-MM-DD` :
+  toute date non calendaire → `400 Date invalide`, jamais 500. Exigé par
+  le port `NouvelleNote`.
 - **Garantie cible** : objet métier `DateDépense`.
 - **Tests** : D — refuse `2026-02-30`, `30/01/2026`, chaîne vide ;
   accepte `2024-02-29`. C — le format renvoyé reste `YYYY-MM-DD`.
@@ -109,11 +111,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **À `265924b`** : tenu pour la création de note, **non tenu** pour la
   suggestion OCR (aucune limite, voir I-hors-registre en fin de
   document et ticket OCR).
-- **État implémenté (V2)** : tenu. Création : description rognée et non
-  vide, justificatif présent, type parmi les 4 autorisés, ≤ 10 Mio,
-  contrôlés sur les métadonnées avant lecture des octets
-  (`validerContenantRecu`). Suggestion : gabarit images ≤ 10 Mio, hors
-  gabarit → `{}` (`SuggererChamps`). Messages du contrat client §5.
+- **État implémenté (V2)** : tenu. Domaine : objet valeur `Description`
+  (rognée, non vide), `verifierContenantRecu`
+  (`src/domain/Justificatif.ts` : 4 types, 10 Mio) appliqué par la route
+  avant lecture des octets, puis `verifierOctetsRecu` (signature réelle
+  PNG, JPEG, WebP, PDF — revue audit V2, point 8) appliqué par
+  `SoumettreNote` avant tout envoi au stockage. Suggestion :
+  `horsGabaritSuggestion` (images seules, même taille maximale) et la
+  même signature ; hors gabarit ou octets incohérents → `{}`. Messages
+  du contrat client §5.
 - **Garantie cible** : validation portée par `SoumettreNote` et
   `SuggérerChamps` avec les mêmes bornes.
 - **Tests** : A — description blanche refusée ; type MIME hors liste
@@ -161,10 +167,14 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **À `265924b`** : tenu par les contrôles SQL copiés dans les 4 routes
   de décision et le `CHECK` de statut en base, mais l'entité
   `ExpenseNote` n'est jamais utilisée par les routes.
-- **État implémenté (V2)** : tenu par l'écriture conditionnelle `status
-  = 'pending'` de `trancherSiEnAttente` et par le `CHECK` de statut.
-  L'entité `ExpenseNote` porte la garde (`DejaTranchee`, ADR-DOMAIN-001)
-  mais `TrancherNote` ne l'invoque pas encore (lot 2).
+- **État implémenté (V2)** : tenu à deux niveaux (ADR-DOMAIN-001,
+  amendé). Règle : `ExpenseNote.approve()`/`reject()`, appelées par
+  `TrancherNote` sur la note lue, lèvent `DejaTranchee` (409) sans
+  écriture. Concurrence : l'écriture conditionnelle `status = 'pending'`
+  de `trancherSiEnAttente`. Borne : `CHECK` de statut. Tests :
+  `tests/unit/domain/ExpenseNote.test.ts`,
+  `tests/unit/application/trancher-note.test.ts`,
+  `drill-transition-guard`.
 - **Garantie cible** : transition portée par l'entité du domaine,
   invoquée par le seul cas d'usage `TrancherNote`.
 - **Tests** : D — `approve()` et `reject()` lèvent sur une note déjà
@@ -217,13 +227,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   centralisée, non testée ; les policies RLS ne connaissaient pas le
   N+1 (alignées depuis par la migration `0005`, ADR-DATA-002
   `accepted`).
-- **État implémenté (V2)** : tenu. `calculerValideurs`
-  (`src/domain/PolitiqueAcces.ts`) : manager direct + N+1, auteur
-  toujours exclu. Règle réévaluée dans le `WHERE` de
-  `trancherSiEnAttente` et dans les policies RLS
-  `expense_notes_valideurs_*` (migration `0005`). Tests :
-  `tests/unit/domain/politique-acces.test.ts`,
-  `tests/integration/rls-policies.test.ts`.
+- **État implémenté (V2)** : tenu. Référence : `calculerValideurs`
+  (`src/domain/PolitiqueAcces.ts`) — manager direct + N+1, auteur
+  toujours exclu ; `besoinDesRh` et `figureDansLaFile` y vivent aussi.
+  Copies imposées : un seul prédicat SQL (`predicatValideur`, partagé
+  par la décision et la file manager) et les policies RLS de la
+  migration `0005`. Les trois versions sont confrontées à une table de
+  vérité unique (`tests/support/table-valideurs.ts`) : domaine par
+  `tests/unit/domain/table-valideurs.test.ts`, SQL et RLS par
+  `tests/integration/concordance-valideurs.test.ts`.
 - **Tests** : D — table de vérité de `valideursDe` (pluriel) ;
   I — le N+1 voit, consulte et tranche ; un manager d'une autre
   branche ou d'une autre entreprise est refusé ; auto-décision
@@ -249,11 +261,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   manager : la base seule ne tient pas l'invariant.
 - **État implémenté (V2)** : tenu. RH de la même entreprise pour les
   auteurs sans manager, les notes de RH (autres RH) et les équipes des
-  managers racines ; égalité d'entreprise ajoutée aux policies
-  (migrations `0003`, `0005`). La file RH (`listerEnAttentePour`) ne
-  liste encore que les auteurs sans manager et les RH : le pouvoir sur
-  les équipes des managers racines n'est accessible que par l'API
-  (lecture A, lot 3).
+  managers racines ; égalité d'entreprise dans les policies (migrations
+  `0003`, `0005`). Couvert par la même table de vérité que I7. La file
+  RH (`figureDansLaFile`) reste restreinte aux auteurs sans manager et
+  aux RH : le pouvoir sur les équipes des managers racines n'est
+  accessible que par l'API (lecture A, lot 3).
 - **Tests** : I — RH de l'entreprise B ne voit ni ne tranche la note
   d'un manager racine de l'entreprise A, **en contournant
   l'applicatif** (requête directe sous contexte RLS) ; employé sans
@@ -330,10 +342,10 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   manager choisi est recherché par `id` + rôle seuls, sans
   `company_id` (`src/app/api/hr/users/[id]/manager/route.ts:39-42`) ;
   le commentaire voisin affirme le contraire de ce que fait le code.
-- **État implémenté (V2)** : tenu. La lecture du manager désigné est
-  bornée à l'entreprise de l'acteur : un manager d'une autre entreprise
-  est introuvable → `409 Invalid manager`. La condition « même
-  entreprise » reste implicite (lot 2 : règle explicite).
+- **État implémenté (V2)** : tenu. Règle explicite du domaine :
+  `verifierManagerEligible` (`src/domain/Hierarchie.ts`) exige la même
+  entreprise que le collaborateur, en plus de la lecture de l'annuaire
+  bornée à l'entreprise → `409 Invalid manager`.
 - **Tests** : A/I — RH de A tente de rattacher son employé à un
   manager de B : refus, rattachement inchangé.
 
@@ -347,10 +359,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   observation mutation RH.
 - **À `265924b`** : violé. Seul l'auto-rattachement direct est bloqué
   (`managerId === id` → 409) ; aucun contrôle transitif.
-- **État implémenté (V2)** : tenu. `detecterCycle` remonte la chaîne
+- **État implémenté (V2)** : tenu. `RattacherAuManager` lit la chaîne
   sous verrou consultatif par entreprise (`verrouillerRattachements`),
-  dans la transaction du rattachement → `409 Cycle hiérarchique
-  détecté`.
+  dans la transaction du rattachement ; la règle est la fonction pure
+  `creeraitUnCycle` du domaine → `409 Cycle hiérarchique détecté`. Tests
+  : `tests/unit/domain/hierarchie.test.ts`.
 - **Garantie cible** : domaine Organisation, parcours de la chaîne
   avant écriture, dans la transaction du cas d'usage. Tranché en
   revue phase/6 : verrou consultatif transactionnel par entreprise
@@ -376,9 +389,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   audit A, observations.
 - **À `265924b`** : partiellement tenu (rôle et auto-rattachement
   contrôlés), violé sur le corps invalide (voir statut).
-- **État implémenté (V2)** : tenu. Rôle `manager` exigé,
-  auto-rattachement refusé (`409 Invalid manager`) ; corps JSON invalide
-  → `400 Corps invalide`, rattachement inchangé.
+- **État implémenté (V2)** : tenu. Domaine (`Hierarchie`) : cible
+  rattachable (`ROLES_RATTACHABLES`, jamais un RH), pas
+  d'auto-rattachement, rôle `manager` exigé (`409 Invalid manager`) ;
+  corps JSON invalide → `400 Corps invalide`, rattachement inchangé. La
+  console RH et l'annuaire utilisent les mêmes règles.
 - **Tests** : A — désigner un `employee` ou soi-même : refus ;
   corps JSON mal formé : `400`, rattachement inchangé. C — le succès
   conserve la forme utilisateur gelée.
@@ -400,9 +415,15 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
 - **À `265924b`** : règle métier tenue en séquentiel, atomicité
   violée : pas de transaction, course possible entre le contrôle
   d'existence et les insertions.
-- **État implémenté (V2)** : tenu. `Inscrire` en une transaction ; la
-  contrainte `UNIQUE(email_domain)` arbitre les inscriptions
-  simultanées. Test : `tests/integration/inscrire-db.test.ts`.
+- **État implémenté (V2)** : tenu. Règles du domaine
+  (`src/domain/Inscription.ts` : champs, `domaineDe`, `estDomainePublic`
+  — domaines e-mail publics refusés, revue audit V2, point 4 —,
+  `nomEntrepriseDepuisDomaine`, `roleALInscription`) appliquées par
+  `Inscrire` en une transaction ; la contrainte `UNIQUE(email_domain)`
+  arbitre les inscriptions simultanées, et la course sur l'email est
+  traduite par l'adaptateur (le cas d'usage ne connaît plus le code
+  PostgreSQL). Tests : `tests/unit/domain/inscription.test.ts`,
+  `tests/integration/inscrire-db.test.ts`.
 - **Garantie cible** : cas d'usage `Inscrire` sous `UnitOfWork`,
   unicité portée aussi par la contrainte `UNIQUE(email_domain)`.
 - **Tests** : I — inscriptions concurrentes sur un domaine nouveau :
@@ -428,9 +449,11 @@ dès qu'il touche à une donnée partagée. Aucun test actuel ne le fait.
   d'attribution de rôle).
 - **À `265924b`** : tenu, par absence de fonctionnalité — donc sans
   test qui le protège d'une régression future.
-- **État implémenté (V2)** : tenu. `Inscrire` n'attribue que `hr_admin`
-  ou `employee` ; aucune route n'écrit `role = 'manager'`. Garantie
-  encore implicite (lot 2 : par le type).
+- **État implémenté (V2)** : tenu, garanti par le type :
+  `roleALInscription` renvoie un `RoleInscription` (`hr_admin` ou
+  `employee`), exigé par le port `NouvelUtilisateur` — une inscription
+  ne peut pas attribuer `manager`. Aucune route n'écrit `role =
+  'manager'`.
 - **Tests** : A/I — tenter d'obtenir `manager` via inscription et via
   chaque route RH : rôle résultant toujours `employee`/`hr_admin`
   selon I14 ; revue de code : aucune route n'écrit `role = 'manager'`.

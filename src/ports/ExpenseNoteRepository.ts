@@ -1,16 +1,22 @@
 import type { Acteur } from '@/domain/Acteur'
+import type { DateDepense } from '@/domain/DateDepense'
+import type { Description } from '@/domain/Description'
+import type { Montant } from '@/domain/Montant'
+import type { Motif } from '@/domain/Motif'
 import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import type { Decision } from '@/domain/NoteTranchee'
 import type { OrdreTri } from '@/domain/OrdreTri'
 import type { Transaction } from '@/ports/UnitOfWork'
 
-// Entrée de création (phase 5) : déjà validée par SoumettreNote
-// (montant I1, date I2, reçu I4). Le reçu est envoyé avant.
+// Entrée de création (phase 5). Les objets valeur du domaine garantissent
+// par le type que montant (I1), date (I2) et description (I3) sont
+// valides : un `number` ou une `string` bruts ne compilent pas. Le reçu
+// est envoyé avant (I4).
 export interface NouvelleNote {
   auteurId: string
-  montant: number
-  dateDepense: string
-  description: string
+  montant: Montant
+  dateDepense: DateDepense
+  description: Description
   receiptKey: string
 }
 
@@ -46,7 +52,9 @@ export interface ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null
+    // Objet valeur du domaine (ADR-DOMAIN-002) : obligatoire au rejet,
+    // garanti par Motif.pour avant l'appel.
+    motif: Motif | null
   ): Promise<boolean>
 
   // Phase 4 : notes en attente visibles par l'acteur (I8) — manager :

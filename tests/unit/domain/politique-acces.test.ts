@@ -4,6 +4,8 @@ import type { NoteAvecAuteur } from '@/domain/NoteAvecAuteur'
 import {
   calculerValideurs,
   peutConsulter,
+  peutDecider,
+  peutLireHistoriqueDe,
   type AuteurNote,
   type ContexteValidateurs,
 } from '@/domain/PolitiqueAcces'
@@ -104,5 +106,19 @@ describe('peutConsulter (I9)', () => {
 
   it('refuse le tiers de la même entreprise', () => {
     expect(peutConsulter(acteur('autre', 'employee', 'c1'), note, ['m1'])).toBe(false)
+  })
+})
+
+describe('rôles décideurs et historique personnel', () => {
+  it('seuls manager et RH tranchent', () => {
+    expect(peutDecider('manager')).toBe(true)
+    expect(peutDecider('hr_admin')).toBe(true)
+    expect(peutDecider('employee')).toBe(false)
+  })
+
+  it('l’historique personnel ne montre que ses propres notes', () => {
+    const acteur: Acteur = { id: 'u1', role: 'employee', companyId: 'c1' }
+    expect(peutLireHistoriqueDe(acteur, 'u1')).toBe(true)
+    expect(peutLireHistoriqueDe(acteur, 'u2')).toBe(false)
   })
 })

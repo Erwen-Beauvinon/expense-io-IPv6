@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { peutEtreDesigneManagerDe } from '@/domain/Hierarchie'
+import { LONGUEUR_MAX_MOTIF, motifDeRejetRenseigne } from '@/domain/Motif'
 
 interface CompanyUser {
   id: string
@@ -70,7 +72,6 @@ export function AdminConsole() {
     loadNotes()
   }, [loadUsers, loadNotes])
 
-  const managers = users.filter((user) => user.role === 'manager')
 
   async function handleManagerChange(userId: string, managerId: string) {
     setSavingId(userId)
@@ -186,8 +187,8 @@ export function AdminConsole() {
                         className={selectClass}
                       >
                         <option value="">— aucun (racine) —</option>
-                        {managers
-                          .filter((manager) => manager.id !== user.id)
+                        {users
+                          .filter((candidat) => peutEtreDesigneManagerDe(candidat, user.id))
                           .map((manager) => (
                             <option key={manager.id} value={manager.id}>
                               {manager.name}
@@ -272,7 +273,7 @@ export function AdminConsole() {
                             <textarea
                               id={`motif-rejet-${note.id}`}
                               rows={2}
-                              maxLength={500}
+                              maxLength={LONGUEUR_MAX_MOTIF}
                               value={motifs[note.id] ?? ''}
                               onChange={(event) =>
                                 setMotifs((precedents) => ({
@@ -287,7 +288,7 @@ export function AdminConsole() {
                                 type="button"
                                 disabled={
                                   decidingId === note.id ||
-                                  (motifs[note.id] ?? '').trim().length === 0
+                                  !motifDeRejetRenseigne(motifs[note.id] ?? '')
                                 }
                                 onClick={() =>
                                   handleDecide(note.id, 'reject', motifs[note.id]?.trim())

@@ -109,16 +109,18 @@ interface ExpenseNoteRepository {
     acteur: Acteur,
     noteId: string,
     decision: Decision,
-    motif: string | null,
-    horodatage: Date,
-  ): Promise<boolean>
+    motif: Motif | null,          // objet valeur du domaine (src/domain/Motif.ts)
+  ): Promise<boolean>             // decided_at = now() SQL, horloge unique
 }
 
+// Objets valeur du domaine (src/domain/) : constructeur privé, aucune
+// instance invalide possible — un nombre ou une chaîne bruts ne
+// compilent pas. L'adaptateur lit `.valeur`.
 interface NouvelleNote {
   auteurId: string
-  montant: number              // déjà validé par l'objet métier Montant (I1)
-  dateDepense: string          // YYYY-MM-DD validée (I2)
-  description: string          // vérifiée non vide, stockée telle quelle (I3)
+  montant: Montant             // I1 (src/domain/Montant.ts)
+  dateDepense: DateDepense     // I2, reste une chaîne YYYY-MM-DD
+  description: Description     // I3, stockée rognée
   receiptKey: string           // clé d'un objet déjà stocké (I4, §6)
 }
 ```
@@ -134,6 +136,11 @@ Garanties attendues de l'implémentation :
   `SELECT` préalable décisionnel. L'autorisation reste vérifiée avant
   par le cas d'usage (404 propre), l'écriture la réévalue
   atomiquement (ADR-ARCH-002 §3) ;
+- le prédicat « l'acteur est valideur » n'existe qu'**une fois** en SQL
+  (`predicatValideur`, exporté par `PgExpenseNoteRepository`), partagé
+  par `trancherSiEnAttente` et la file manager ; sa concordance avec
+  `calculerValideurs` et les policies RLS est prouvée par
+  `tests/integration/concordance-valideurs.test.ts` ;
 - `listerEnAttentePour` se déduit du rattachement **courant**
   (ADR-ARCH-002) : aucun valideur stocké n'est lu. La liste RH est
   une file de routage (auteurs sans manager), pas l'ensemble du
@@ -171,7 +178,9 @@ interface AnnuaireOrganisation {
 
   // Inscription (I14, I15)
   creerEntreprise(tx: Transaction, nom: string, domaine: string): Promise<{ id: string; nouvelle: boolean }>
-  creerUtilisateur(tx: Transaction, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire>
+  // null si l'email est déjà pris : l'adaptateur traduit la violation
+  // d'unicité, le cas d'usage ne voit aucun code d'erreur de la base.
+  creerUtilisateur(tx: Transaction, entree: NouvelUtilisateur): Promise<UtilisateurAnnuaire | null>
 }
 ```
 
@@ -301,12 +310,13 @@ Contrat :
 - exception réservée à la panne du moteur ; `SuggérerChamps` la
   traduit en `{}` journalisé, comme aujourd'hui — le client ne voit
   pas la différence ;
-- les **bornes** sont portées par le cas d'usage, pas par
-  l'adaptateur : types image acceptés (png/jpeg/webp, pas le PDF),
-  taille ≤ 10 Mio alignée sur I3, vérifiées sur les métadonnées avant
-  lecture des octets (revue phase/5, F7), délai 15 s avec annulation
-  réelle (signal honoré, worker terminé) et plafond de concurrence
-  côté adaptateur (saturation → `{}`) ;
+- le **gabarit** est une règle du domaine (`src/domain/Justificatif.ts`,
+  `horsGabaritSuggestion`), pas de l'adaptateur : types image acceptés
+  (png/jpeg/webp, pas le PDF), taille ≤ 10 Mio alignée sur I3,
+  vérifiés sur les métadonnées avant lecture des octets (revue
+  phase/5, F7). Le délai de 15 s avec annulation réelle reste dans le
+  cas d'usage, le plafond de concurrence dans l'adaptateur
+  (saturation → `{}`) : ce sont des bornes techniques ;
 - extension future sans rupture : des champs optionnels (score de
   confiance, moteur utilisé) pourront enrichir `SuggestionRecu` côté
   serveur ; seuls `amount` et `expenseDate` traversent vers le client
