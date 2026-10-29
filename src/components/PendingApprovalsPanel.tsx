@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { LONGUEUR_MAX_MOTIF, motifDeRejetRenseigne } from '@/domain/Motif'
+import { MESSAGE_ERREUR_RESEAU } from '@/utils/erreurReseau'
 
 interface ExpenseNote {
   id: string
@@ -30,13 +31,18 @@ export function PendingApprovalsPanel() {
   const [motifs, setMotifs] = useState<Record<string, string>>({})
 
   const loadPending = useCallback(async () => {
-    const response = await fetch('/api/manager/expense-notes')
-    if (response.ok) {
-      setNotes(await response.json())
-    } else {
-      setError('Impossible de charger les notes en attente.')
+    try {
+      const response = await fetch('/api/manager/expense-notes')
+      if (response.ok) {
+        setNotes(await response.json())
+      } else {
+        setError('Impossible de charger les notes en attente.')
+      }
+    } catch {
+      setError(MESSAGE_ERREUR_RESEAU)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -46,24 +52,36 @@ export function PendingApprovalsPanel() {
 
   async function handleViewReceipt(id: string) {
     setError(null)
-    const response = await fetch(`/api/manager/expense-notes/${id}/receipt-url`)
-    if (!response.ok) {
-      setError('Impossible de récupérer le reçu.')
-      return
+    try {
+      const response = await fetch(`/api/manager/expense-notes/${id}/receipt-url`)
+      if (!response.ok) {
+        setError('Impossible de récupérer le reçu.')
+        return
+      }
+      const { url } = await response.json()
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      setError(MESSAGE_ERREUR_RESEAU)
     }
-    const { url } = await response.json()
-    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   async function handleDecide(id: string, decision: 'approve' | 'reject', reason?: string) {
     setDecidingId(id)
     setError(null)
-    const response = await fetch(`/api/manager/expense-notes/${id}/${decision}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: reason === undefined ? undefined : JSON.stringify({ reason }),
-    })
-    setDecidingId(null)
+    let response: Response
+    try {
+      response = await fetch(`/api/manager/expense-notes/${id}/${decision}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: reason === undefined ? undefined : JSON.stringify({ reason }),
+      })
+    } catch {
+      // Motif et formulaire de rejet conservés : la décision peut être renvoyée.
+      setError(MESSAGE_ERREUR_RESEAU)
+      return
+    } finally {
+      setDecidingId(null)
+    }
     if (decision === 'reject') {
       setRejectingId(null)
       setMotifs((precedents) => {

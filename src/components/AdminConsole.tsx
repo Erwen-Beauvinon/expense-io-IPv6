@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { peutEtreDesigneManagerDe } from '@/domain/Hierarchie'
 import { LONGUEUR_MAX_MOTIF, motifDeRejetRenseigne } from '@/domain/Motif'
+import { MESSAGE_ERREUR_RESEAU } from '@/utils/erreurReseau'
 
 interface CompanyUser {
   id: string
@@ -47,23 +48,33 @@ export function AdminConsole() {
   const [motifs, setMotifs] = useState<Record<string, string>>({})
 
   const loadUsers = useCallback(async () => {
-    const response = await fetch('/api/hr/users')
-    if (response.ok) {
-      setUsers(await response.json())
-    } else {
-      setUsersError("Impossible de charger l'annuaire.")
+    try {
+      const response = await fetch('/api/hr/users')
+      if (response.ok) {
+        setUsers(await response.json())
+      } else {
+        setUsersError("Impossible de charger l'annuaire.")
+      }
+    } catch {
+      setUsersError(MESSAGE_ERREUR_RESEAU)
+    } finally {
+      setUsersLoading(false)
     }
-    setUsersLoading(false)
   }, [])
 
   const loadNotes = useCallback(async () => {
-    const response = await fetch('/api/hr/expense-notes')
-    if (response.ok) {
-      setNotes(await response.json())
-    } else {
-      setNotesError('Impossible de charger les notes en attente.')
+    try {
+      const response = await fetch('/api/hr/expense-notes')
+      if (response.ok) {
+        setNotes(await response.json())
+      } else {
+        setNotesError('Impossible de charger les notes en attente.')
+      }
+    } catch {
+      setNotesError(MESSAGE_ERREUR_RESEAU)
+    } finally {
+      setNotesLoading(false)
     }
-    setNotesLoading(false)
   }, [])
 
   useEffect(() => {
@@ -76,12 +87,20 @@ export function AdminConsole() {
   async function handleManagerChange(userId: string, managerId: string) {
     setSavingId(userId)
     setUsersError(null)
-    const response = await fetch(`/api/hr/users/${userId}/manager`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ managerId: managerId === '' ? null : managerId }),
-    })
-    setSavingId(null)
+    let response: Response
+    try {
+      response = await fetch(`/api/hr/users/${userId}/manager`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ managerId: managerId === '' ? null : managerId }),
+      })
+    } catch {
+      // La liste n'est pas rechargée : le sélecteur garde le rattachement actuel.
+      setUsersError(MESSAGE_ERREUR_RESEAU)
+      return
+    } finally {
+      setSavingId(null)
+    }
 
     if (response.ok) {
       await loadUsers()
@@ -95,24 +114,36 @@ export function AdminConsole() {
 
   async function handleViewReceipt(id: string) {
     setNotesError(null)
-    const response = await fetch(`/api/hr/expense-notes/${id}/receipt-url`)
-    if (!response.ok) {
-      setNotesError('Impossible de récupérer le reçu.')
-      return
+    try {
+      const response = await fetch(`/api/hr/expense-notes/${id}/receipt-url`)
+      if (!response.ok) {
+        setNotesError('Impossible de récupérer le reçu.')
+        return
+      }
+      const { url } = await response.json()
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      setNotesError(MESSAGE_ERREUR_RESEAU)
     }
-    const { url } = await response.json()
-    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   async function handleDecide(id: string, decision: 'approve' | 'reject', reason?: string) {
     setDecidingId(id)
     setNotesError(null)
-    const response = await fetch(`/api/hr/expense-notes/${id}/${decision}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: reason === undefined ? undefined : JSON.stringify({ reason }),
-    })
-    setDecidingId(null)
+    let response: Response
+    try {
+      response = await fetch(`/api/hr/expense-notes/${id}/${decision}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: reason === undefined ? undefined : JSON.stringify({ reason }),
+      })
+    } catch {
+      // Motif et formulaire de rejet conservés : la décision peut être renvoyée.
+      setNotesError(MESSAGE_ERREUR_RESEAU)
+      return
+    } finally {
+      setDecidingId(null)
+    }
     if (decision === 'reject') {
       setRejectingId(null)
       setMotifs((precedents) => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { MESSAGE_ERREUR_RESEAU } from '@/utils/erreurReseau'
 
 interface ExpenseNote {
   id: string
@@ -53,15 +54,23 @@ export default function ExpensesPage() {
   const [amount, setAmount] = useState('')
   const [expenseDate, setExpenseDate] = useState('')
   const receiptInputRef = useRef<HTMLInputElement>(null)
+  // Analyse OCR en cours : l'annuler quand le reçu change, pour qu'une
+  // suggestion tardive de l'ancien reçu ne remplisse pas le formulaire.
+  const suggestionRef = useRef<AbortController | null>(null)
 
   const loadNotes = useCallback(async () => {
-    const response = await fetch('/api/expense-notes')
-    if (response.ok) {
-      setNotes(await response.json())
-    } else {
-      setError('Impossible de charger les notes de frais.')
+    try {
+      const response = await fetch('/api/expense-notes')
+      if (response.ok) {
+        setNotes(await response.json())
+      } else {
+        setError('Impossible de charger les notes de frais.')
+      }
+    } catch {
+      setError(MESSAGE_ERREUR_RESEAU)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -78,13 +87,22 @@ export default function ExpensesPage() {
     const form = event.currentTarget
     const formData = new FormData(form)
 
-    const response = await fetch('/api/expense-notes', {
-      method: 'POST',
-      body: formData,
-    })
-    setSubmitting(false)
+    let response: Response
+    try {
+      response = await fetch('/api/expense-notes', {
+        method: 'POST',
+        body: formData,
+      })
+    } catch {
+      // Saisie conservée : l'utilisateur peut renvoyer le même formulaire.
+      setError(MESSAGE_ERREUR_RESEAU)
+      return
+    } finally {
+      setSubmitting(false)
+    }
 
     if (response.ok) {
+      annulerSuggestion()
       form.reset()
       setAmount('')
       setExpenseDate('')
@@ -100,56 +118,88 @@ export default function ExpensesPage() {
     }
   }
 
+  // Annulation volontaire : aucune erreur affichée, le bouton redevient actif.
+  function annulerSuggestion() {
+    if (suggestionRef.current) {
+      suggestionRef.current.abort()
+      suggestionRef.current = null
+      setExtracting(false)
+    }
+  }
+
   async function handleSuggestFields() {
     const receipt = receiptInputRef.current?.files?.[0]
     if (!receipt) {
       setError('Sélectionne d’abord un reçu.')
       return
     }
+    annulerSuggestion()
+    const controller = new AbortController()
+    suggestionRef.current = controller
     setExtracting(true)
     setError(null)
     setSuggestionNotice(null)
 
     const formData = new FormData()
     formData.set('receipt', receipt)
-    const response = await fetch('/api/expense-notes/receipt-suggestion', {
-      method: 'POST',
-      body: formData,
-    })
-    setExtracting(false)
+    try {
+      const response = await fetch('/api/expense-notes/receipt-suggestion', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      })
 
-    if (!response.ok) {
-      setError('Impossible d’analyser ce reçu.')
-      return
-    }
-    // Une réponse vide est valide (rien à suggérer) : sans ce message, ça
-    // ne se distinguerait pas visuellement d'un bouton qui n'a rien fait.
-    const suggestion = (await response.json()) as { amount?: number; expenseDate?: string }
-    const foundAmount = typeof suggestion.amount === 'number'
-    const foundDate = typeof suggestion.expenseDate === 'string'
-    if (foundAmount) {
-      setAmount(String(suggestion.amount))
-    }
-    if (foundDate) {
-      setExpenseDate(suggestion.expenseDate as string)
-    }
-    if (!foundAmount && !foundDate) {
-      setSuggestionNotice('Aucune information reconnue sur ce reçu — saisis les champs manuellement.')
-    } else if (!foundAmount || !foundDate) {
-      setSuggestionNotice(
-        `${foundAmount ? 'Date' : 'Montant'} non reconnu(e) sur ce reçu — vérifie ce champ.`
-      )
+      if (!response.ok) {
+        setError('Impossible d’analyser ce reçu.')
+        return
+      }
+      // Une réponse vide est valide (rien à suggérer) : sans ce message, ça
+      // ne se distinguerait pas visuellement d'un bouton qui n'a rien fait.
+      const suggestion = (await response.json()) as { amount?: number; expenseDate?: string }
+      if (controller.signal.aborted) {
+        return
+      }
+      const foundAmount = typeof suggestion.amount === 'number'
+      const foundDate = typeof suggestion.expenseDate === 'string'
+      if (foundAmount) {
+        setAmount(String(suggestion.amount))
+      }
+      if (foundDate) {
+        setExpenseDate(suggestion.expenseDate as string)
+      }
+      if (!foundAmount && !foundDate) {
+        setSuggestionNotice('Aucune information reconnue sur ce reçu — saisis les champs manuellement.')
+      } else if (!foundAmount || !foundDate) {
+        setSuggestionNotice(
+          `${foundAmount ? 'Date' : 'Montant'} non reconnu(e) sur ce reçu — vérifie ce champ.`
+        )
+      }
+    } catch {
+      if (!controller.signal.aborted) {
+        setError(MESSAGE_ERREUR_RESEAU)
+      }
+    } finally {
+      // Une analyse annulée a déjà rendu la main (annulerSuggestion) et ne
+      // doit pas toucher l'état d'une éventuelle analyse plus récente.
+      if (suggestionRef.current === controller) {
+        suggestionRef.current = null
+        setExtracting(false)
+      }
     }
   }
 
   async function handleViewReceipt(id: string) {
-    const response = await fetch(`/api/expense-notes/${id}/receipt-url`)
-    if (!response.ok) {
-      setError('Impossible de récupérer le reçu.')
-      return
+    try {
+      const response = await fetch(`/api/expense-notes/${id}/receipt-url`)
+      if (!response.ok) {
+        setError('Impossible de récupérer le reçu.')
+        return
+      }
+      const { url } = await response.json()
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch {
+      setError(MESSAGE_ERREUR_RESEAU)
     }
-    const { url } = await response.json()
-    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   const total = notes.reduce((sum, note) => sum + note.amount, 0)
@@ -224,6 +274,7 @@ export default function ExpensesPage() {
               type="file"
               accept="image/png,image/jpeg,image/webp,application/pdf"
               required
+              onChange={annulerSuggestion}
               className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100 dark:text-gray-400 dark:file:bg-gray-800 dark:file:text-brand-300"
             />
             <button
