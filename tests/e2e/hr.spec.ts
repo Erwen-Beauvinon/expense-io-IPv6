@@ -1,6 +1,8 @@
 import { RECEIPT_PNG, createNote, noteStatus } from './support/data'
 import { expect, login, noteRow, test } from './support/fixtures'
 
+const ERREUR_RESEAU = 'Connexion impossible. Vérifie ton réseau et réessaie.'
+
 test.describe('RH', () => {
   test('voit l’organigramme de son entreprise', async ({ page, company }) => {
     await login(page, company.hr)
@@ -104,5 +106,42 @@ test.describe('RH', () => {
     await login(page, company.manager)
     await page.goto('/manager')
     await expect(noteRow(page, 'Formation sécurité')).toBeVisible()
+  })
+
+  // Audit F12 : une coupure réseau ne laisse ni ligne ni sélecteur bloqués.
+  test('une coupure réseau à l’approbation affiche une alerte et réactive le bouton', async ({
+    page,
+    company,
+  }) => {
+    const noteId = await createNote(company.manager, { description: 'Congrès Bordeaux' })
+    await page.route('**/api/hr/expense-notes/*/approve', (route) =>
+      route.abort('internetdisconnected')
+    )
+
+    await login(page, company.hr)
+    await page.goto('/hr')
+    await noteRow(page, 'Congrès Bordeaux').getByRole('button', { name: 'Approuver' }).click()
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(
+      noteRow(page, 'Congrès Bordeaux').getByRole('button', { name: 'Approuver' })
+    ).toBeEnabled()
+    expect(await noteStatus(noteId)).toBe('pending')
+  })
+
+  test('une coupure réseau au rattachement garde le manager actuel', async ({ page, company }) => {
+    await page.route('**/api/hr/users/*/manager', (route) => route.abort('internetdisconnected'))
+    const managerSelect = page
+      .getByRole('row')
+      .filter({ hasText: company.employee.email })
+      .getByRole('combobox')
+
+    await login(page, company.hr)
+    await page.goto('/hr')
+    await managerSelect.selectOption('')
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(managerSelect).toBeEnabled()
+    await expect(managerSelect).toHaveValue(company.manager.id)
   })
 })
