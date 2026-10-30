@@ -5,6 +5,12 @@
 import { deleteCompanyByDomain, uniqueDomain, userByEmail } from './support/data'
 import { expect, test } from './support/fixtures'
 
+// L'inscription enchaîne deux bcrypt de coût 12 (hachage puis vérification
+// par signIn) en JavaScript pur, plus la transaction et le rendu de
+// /expenses : 2 à 5 s mesurées sous `next dev` avec deux workers, au-delà
+// des 5 s par défaut d'expect. Seul le délai change, pas ce qui est vérifié.
+const DELAI_REDIRECTION_INSCRIPTION = 10_000
+
 test.describe('Inscription', () => {
   let domain: string
 
@@ -27,7 +33,7 @@ test.describe('Inscription', () => {
     await page.getByLabel('Mot de passe').fill('motdepasse-1')
     await page.getByRole('button', { name: "S'inscrire" }).click()
 
-    await expect(page).toHaveURL(/\/expenses$/)
+    await expect(page).toHaveURL(/\/expenses$/, { timeout: DELAI_REDIRECTION_INSCRIPTION })
     await expect(nav.getByRole('link', { name: 'RH' })).toBeVisible()
     await nav.getByRole('button', { name: 'Se déconnecter' }).click()
 
@@ -37,7 +43,7 @@ test.describe('Inscription', () => {
     await page.getByLabel('Mot de passe').fill('motdepasse-2')
     await page.getByRole('button', { name: "S'inscrire" }).click()
 
-    await expect(page).toHaveURL(/\/expenses$/)
+    await expect(page).toHaveURL(/\/expenses$/, { timeout: DELAI_REDIRECTION_INSCRIPTION })
     await expect(nav.getByRole('link', { name: 'RH' })).toHaveCount(0)
 
     const founder = await userByEmail(`fondatrice@${domain}`)
@@ -57,7 +63,7 @@ test.describe('Inscription', () => {
     }
 
     await signup()
-    await expect(page).toHaveURL(/\/expenses$/)
+    await expect(page).toHaveURL(/\/expenses$/, { timeout: DELAI_REDIRECTION_INSCRIPTION })
     await page.getByRole('button', { name: 'Se déconnecter' }).click()
 
     await signup()
