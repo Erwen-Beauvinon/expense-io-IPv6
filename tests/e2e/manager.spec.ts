@@ -1,6 +1,8 @@
 import { RECEIPT_PNG, createNote, noteStatus } from './support/data'
 import { expect, login, noteRow, test } from './support/fixtures'
 
+const ERREUR_RESEAU = 'Connexion impossible. Vérifie ton réseau et réessaie.'
+
 test.describe('Manager', () => {
   test('voit les notes en attente de son équipe, pas les siennes', async ({ page, company }) => {
     await createNote(company.employee, { description: 'Déjeuner équipe', amount: 64 })
@@ -65,5 +67,42 @@ test.describe('Manager', () => {
     const response = await popup.request.get(popup.url())
     expect(response.ok()).toBe(true)
     expect(Buffer.from(await response.body())).toEqual(RECEIPT_PNG)
+  })
+
+  // Audit F12 : une décision perdue sur le réseau ne bloque pas la ligne.
+  test('une coupure réseau à l’approbation affiche une alerte et réactive le bouton', async ({
+    page,
+    company,
+  }) => {
+    const noteId = await createNote(company.employee, { description: 'Hôtel Nantes' })
+    await page.route('**/api/manager/expense-notes/*/approve', (route) =>
+      route.abort('internetdisconnected')
+    )
+
+    await login(page, company.manager)
+    await page.goto('/manager')
+    await noteRow(page, 'Hôtel Nantes').getByRole('button', { name: 'Approuver' }).click()
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(noteRow(page, 'Hôtel Nantes').getByRole('button', { name: 'Approuver' })).toBeEnabled()
+    expect(await noteStatus(noteId)).toBe('pending')
+  })
+
+  test('une coupure réseau au rejet conserve le motif saisi', async ({ page, company }) => {
+    await createNote(company.employee, { description: 'Location voiture' })
+    await page.route('**/api/manager/expense-notes/*/reject', (route) =>
+      route.abort('internetdisconnected')
+    )
+
+    await login(page, company.manager)
+    await page.goto('/manager')
+    const row = noteRow(page, 'Location voiture')
+    await row.getByRole('button', { name: 'Rejeter' }).click()
+    await row.getByLabel(/Motif du rejet/).fill('Hors politique voyage')
+    await row.getByRole('button', { name: 'Confirmer le rejet' }).click()
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(row.getByLabel(/Motif du rejet/)).toHaveValue('Hors politique voyage')
+    await expect(row.getByRole('button', { name: 'Confirmer le rejet' })).toBeEnabled()
   })
 })

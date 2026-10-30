@@ -1,6 +1,8 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { RECEIPT_PNG, createNote } from './support/data'
 import { expect, login, noteRow, test } from './support/fixtures'
+
+const ERREUR_RESEAU = 'Connexion impossible. Vérifie ton réseau et réessaie.'
 
 // Rend un ticket de caisse lisible par Tesseract : du texte noir sur fond
 // blanc, en grand, capturé en PNG par le navigateur lui-même.
@@ -96,5 +98,107 @@ test.describe('Employé', () => {
     await login(page, company.employee)
     await page.getByRole('button', { name: 'Pré-remplir depuis le reçu' }).click()
     await expect(page.getByRole('main').getByRole('alert')).toHaveText('Sélectionne d’abord un reçu.')
+  })
+
+  // Audit F12 : un fetch rejeté (coupure réseau) ne laisse plus l'interface
+  // en attente ; la saisie est conservée pour réessayer.
+  test('une coupure réseau à la soumission affiche une alerte et permet de réessayer', async ({
+    page,
+    company,
+  }) => {
+    await login(page, company.employee)
+    await expect(page.getByText('Aucune note de frais pour le moment.')).toBeVisible()
+    const coupure = (route: Route) =>
+      route.request().method() === 'POST' ? route.abort('internetdisconnected') : route.fallback()
+    await page.route('**/api/expense-notes', coupure)
+
+    await page.getByLabel('Montant (€)').fill('18.90')
+    await page.getByLabel('Date').fill('2026-10-02')
+    await page.getByLabel('Description').fill('Métro Lille')
+    await page
+      .getByLabel('Reçu (image ou PDF)')
+      .setInputFiles({ name: 'recu.png', mimeType: 'image/png', buffer: RECEIPT_PNG })
+    await page.getByRole('button', { name: 'Soumettre' }).click()
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(page.getByRole('button', { name: 'Soumettre' })).toBeEnabled()
+    await expect(page.getByLabel('Montant (€)')).toHaveValue('18.90')
+    await expect(page.getByLabel('Description')).toHaveValue('Métro Lille')
+
+    // Le réseau revient : le même formulaire part sans ressaisie.
+    await page.unroute('**/api/expense-notes', coupure)
+    await page.getByRole('button', { name: 'Soumettre' }).click()
+    await expect(noteRow(page, 'Métro Lille')).toContainText('18,90')
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0)
+  })
+
+  test('une coupure réseau au chargement affiche une alerte au lieu de « Chargement… »', async ({
+    page,
+    company,
+  }) => {
+    await page.route('**/api/expense-notes', (route) =>
+      route.request().method() === 'GET' ? route.abort('internetdisconnected') : route.fallback()
+    )
+    await login(page, company.employee)
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(page.getByText('Chargement…')).toHaveCount(0)
+  })
+
+  test('une coupure réseau pendant l’analyse du reçu réactive le bouton', async ({
+    page,
+    company,
+  }) => {
+    await page.route('**/api/expense-notes/receipt-suggestion', (route) =>
+      route.abort('internetdisconnected')
+    )
+    await login(page, company.employee)
+    await page
+      .getByLabel('Reçu (image ou PDF)')
+      .setInputFiles({ name: 'recu.png', mimeType: 'image/png', buffer: RECEIPT_PNG })
+    await page.getByRole('button', { name: 'Pré-remplir depuis le reçu' }).click()
+
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(ERREUR_RESEAU)
+    await expect(page.getByRole('button', { name: 'Pré-remplir depuis le reçu' })).toBeEnabled()
+  })
+
+  test('remplacer le reçu pendant l’analyse ignore la suggestion de l’ancien reçu', async ({
+    page,
+    company,
+  }) => {
+    // La première analyse est retenue jusqu'au remplacement du reçu ; la
+    // suivante répond tout de suite, avec une date seulement.
+    let premiereAnalyse: Route | undefined
+    let signalerPremiere!: () => void
+    const premiereInterceptee = new Promise<void>((resolve) => (signalerPremiere = resolve))
+    await page.route('**/api/expense-notes/receipt-suggestion', async (route) => {
+      if (!premiereAnalyse) {
+        premiereAnalyse = route
+        signalerPremiere()
+        return
+      }
+      await route.fulfill({ json: { expenseDate: '2026-02-02' } })
+    })
+
+    await login(page, company.employee)
+    const recu = page.getByLabel('Reçu (image ou PDF)')
+    await recu.setInputFiles({ name: 'ancien.png', mimeType: 'image/png', buffer: RECEIPT_PNG })
+    await page.getByRole('button', { name: 'Pré-remplir depuis le reçu' }).click()
+    await expect(page.getByRole('button', { name: 'Analyse du reçu…' })).toBeDisabled()
+    await premiereInterceptee
+
+    await recu.setInputFiles({ name: 'nouveau.png', mimeType: 'image/png', buffer: RECEIPT_PNG })
+    await expect(page.getByRole('button', { name: 'Pré-remplir depuis le reçu' })).toBeEnabled()
+    // Réponse tardive de l'ancien reçu : la requête est déjà annulée côté
+    // navigateur, Playwright peut refuser de la compléter.
+    await premiereAnalyse!
+      .fulfill({ json: { amount: 99.99, expenseDate: '2020-01-01' } })
+      .catch(() => {})
+
+    await page.getByRole('button', { name: 'Pré-remplir depuis le reçu' }).click()
+    await expect(page.getByLabel('Date')).toHaveValue('2026-02-02')
+    await expect(page.getByLabel('Montant (€)')).toHaveValue('')
+    // Une annulation volontaire n'est pas une erreur.
+    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0)
   })
 })
